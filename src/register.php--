@@ -1,0 +1,111 @@
+<?php 
+
+/*************************    הרשמה  ****************************/
+/**
+ * edit the new user email.
+ *
+
+add_filter( 'wp_new_user_notification_email',  'custom_wp_new_user_notification_email' , 10, 3 );
+function custom_wp_new_user_notification_email( $wp_new_user_notification_email, $user, $blogname ) {
+	global $wpdb, $wp_hasher;
+	// Generate something random for a password reset key.
+	$key = wp_generate_password( 20, false );
+	// This action is documented in wp-login.php
+	do_action( 'retrieve_password_key', $user->user_login, $key );
+	// Now insert the key, hashed, into the DB.
+	if ( empty( $wp_hasher ) ) {
+		require_once ABSPATH . WPINC . '/class-phpass.php';
+		$wp_hasher = new PasswordHash( 8, true );
+	}
+	$hashed = time() . ':' . $wp_hasher->HashPassword( $key );
+	$wpdb->update( $wpdb->users, array( 'user_activation_key' => $hashed ), array( 'user_login' => $user->user_login ) );
+	$switched_locale = switch_to_locale( get_user_locale( $user ) );		
+
+	$message = sprintf(__('שלום %s,'), $user->display_name) . "<br><br>";
+	$message .= sprintf(__('תודה שנרשמת לאתר: %s'), $blogname) . "<br><br>";
+	$message .= sprintf(__('שם המשתמש שלך הינו: %s'), $user->user_login) . "<br><br>";
+	$message .= 'במידה ואינך נרשמת לאתר אנא צור עמנו קשר דרך האתר: ';
+	$message .= '<a href="' .get_field('contact_link','options'). '">בקישור זה.</a><br><br>';	
+	$headers = "MIME-Version: 1.0\r\n";
+	$headers.= "Content-Type: text/html;charset=UTF-8\r\n";
+	$headers.= "From: ".$blogname."  <info@".$blogname.">\r\n";
+	$headers.= "X-Mailer: PHP/" . phpversion();	
+	$wp_new_user_notification_email['message'] = $message;
+	$wp_new_user_notification_email['subject'] = sprintf( '%s , נרשמת בהצלחה לאתר %s.', $user->display_name , $blogname);
+	$wp_new_user_notification_email['headers'] = $headers;
+	return $wp_new_user_notification_email;
+}
+ */
+/**
+ * Handles the registration of a new user.
+ *
+ * Used through the action hook "login_form_register" activated on wp-login.php
+ * when accessed through the registration action.
+ */
+add_action( 'login_form_register', 'do_register_user' );
+function do_register_user() {
+	error_log('src\register.php  - function do_register_user() {');
+	if ( 'POST' == $_SERVER['REQUEST_METHOD'] ) {
+		//$redirect_url = home_url( 'member-register' );// רצוי לא להסתמך על הסלאג
+		// $redirect_url = home_url( 'login-register' );// רצוי לא להסתמך על הסלאג
+		$redirect_url = 'http://localhost/one-layer/login-register/';// רצוי לא להסתמך על הסלאג
+ 
+		if ( ! get_option( 'users_can_register' ) ) {
+			// Registration closed, display error
+			$redirect_url = add_query_arg( 'register-errors', 'closed', $redirect_url );
+		} else {
+			$email = $_POST['email'];
+			$first_name = sanitize_text_field( $_POST['first_name'] );
+			$last_name = sanitize_text_field( $_POST['last_name'] );
+			// $user_name = sanitize_text_field( $_POST['user_name'] );
+			// $reg_password = sanitize_text_field( $_POST['reg_password'] );
+			
+			// user fields
+			$company = sanitize_text_field( $_POST['company'] );
+			// $phone = sanitize_text_field( $_POST['phone'] );
+			// $address = sanitize_text_field( $_POST['address'] );
+			// $address_city = sanitize_text_field( $_POST['address_city'] );
+			// $address_zip = sanitize_text_field( $_POST['address_zip'] );
+			// $birthday = sanitize_text_field( $_POST['birthday'] );
+			// $marrige = sanitize_text_field( $_POST['marrige'] );
+
+																									/// יש להוסיף כאן את השדות הנוספים שיוצרים				
+		
+ 
+			$result = register_user( $email, $first_name, $last_name, $company); /// יש להוסיף כאן את השדות הנוספים שיוצרים
+ 
+			if ( is_wp_error( $result ) ) {
+				// Parse errors into a string and append as parameter to redirect
+				$errors = join( ',', $result->get_error_codes() );
+				$redirect_url = add_query_arg( 'register-errors', $errors, $redirect_url );
+			} else {
+				// Success, redirect to login page.
+				//$redirect_url = home_url( 'member-login' ); // רצוי לא להסתמך על הסלאג
+				$redirect_url = add_query_arg( 'registered', $email, $redirect_url );
+			}
+		}
+ 
+		//wp_redirect( $redirect_url );
+		exit;
+	}
+}
+
+/**
+ * Redirects the user to the custom registration page instead
+ * of wp-login.php?action=register.
+ *-/
+
+add_action( 'login_form_register', 'redirect_to_custom_register' );
+function redirect_to_custom_register() {
+	if ( 'GET' == $_SERVER['REQUEST_METHOD'] ) {
+		if ( is_user_logged_in() ) {
+			//redirect_logged_in_user();
+		} else {
+			//wp_redirect( home_url( 'member-register' ) );// רצוי לא להסתמך על הסלאג
+		}
+		exit;
+	}
+}
+*/
+
+?>

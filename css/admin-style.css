@@ -1,0 +1,38 @@
+/* admin-style.css */
+.clu-custom-settings {
+    background-color: #f9f9f9;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.clu-custom-settings h1 {
+    color: #333;
+    font-size: 24px;
+}
+.clu-custom-settings .form-table label {
+	display: block;
+    width: 300px;
+}
+.clu-custom-settings .form-table input[type="text"] {
+	display: block;
+    width: 100%;
+    max-width: 400px;
+    padding: 2px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 0;
+}
+.clu-custom-settings .form-table tr {
+	background-color: #eee;
+}
+.clu-custom-settings .form-table tr:nth-child(2n) {
+	background-color: #fff;
+}
+.clu-custom-settings .form-table th,
+.clu-custom-settings .form-table td {
+		vertical-align: middle;
+		margin-bottom: 5px;
+		padding: 5px 10px;
+}
+  

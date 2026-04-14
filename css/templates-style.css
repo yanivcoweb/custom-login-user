@@ -1,0 +1,56 @@
+.form-clu *[onclick],
+.form-clu *[type="submit"] {
+    cursor: pointer;
+}
+.form-clu .error-message {
+	display: none;
+	color: red;
+	font-size: 90%;
+}
+.form-clu .form-row {
+    margin-bottom: 1rem;
+}
+.form-clu label {
+    display: inline-block;
+    margin-top: 0;
+    margin-bottom: 0.2rem;
+}
+
+.error-message {
+	color: #fa1515;
+	font-size: 16px;
+}
+.error-message p {
+    font-size: 16px;
+}
+/* Password requirements list */
+.clu-password-requirements li {
+    margin: 6px 0 0 0;
+    padding: 2px 5px;
+    background: #f8f9fa;
+    border-left: 3px solid #b0b8c1;
+    border-radius: 3px;
+    list-style: none;
+    font-size: 0.75rem;
+    color: #555;
+    line-height: 1.7;
+}
+.clu-password-requirements li::before {
+    /* content: "• ";
+    color: #888; */
+}
+
+/* Required field asterisk */
+.form-row:has([custom-required]) label::after {
+    content: " *";
+    color: #c0392b;
+}
+
+/* Disabled submit button while processing */
+.form-clu [type="submit"]:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/**/
+
