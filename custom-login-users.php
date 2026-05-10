@@ -155,7 +155,3 @@ function restrict_dashboard_access_for_custom_roles() {
         exit;
     }
 }
-
-
-
-?>

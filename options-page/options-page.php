@@ -817,7 +817,3 @@ function my_custom_settings_section_callback() {
 // function forms_text_section_callback() {
     // echo '<p>Customize text used in forms below:</p>';
 // }
-
-
-?>
-

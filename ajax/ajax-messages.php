@@ -8,12 +8,18 @@ function clu_save_messages_handler() {
         wp_send_json_error(['message' => 'Unauthorized.']);
     }
 
-    $keys    = array_keys(clu_default_messages());
-    $saved   = [];
+    // Subject lines must be plain text; all other fields allow safe HTML via wp_kses_post
+    $subject_keys = ['reset_email_subject', 'notify_client_subject', 'notify_user_subject'];
+
+    $keys  = array_keys(clu_default_messages());
+    $saved = [];
 
     foreach ($keys as $key) {
         if (isset($_POST[$key])) {
-            $saved[$key] = sanitize_textarea_field(wp_unslash($_POST[$key]));
+            $value = wp_unslash($_POST[$key]);
+            $saved[$key] = in_array($key, $subject_keys, true)
+                ? sanitize_text_field($value)
+                : wp_kses_post($value);
         }
     }
 

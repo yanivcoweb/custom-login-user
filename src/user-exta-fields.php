@@ -26,8 +26,3 @@ function extra_user_profile_fields( $user ) {
 	error_log('src\user-exta-fields.php - function extra_user_profile_fields( $user ) {');		
 	echo custom_login_users_get_template_html( 'user_exta_fields', $user);
 }
-
-
-
-
-?>

@@ -57,7 +57,7 @@ function render_login_form( $attributes, $content = null ) {
 		// Render the login form using an external template
 		// return custom_login_users_get_template_html( 'form_logout', $attributes );
 		$options = get_option('clu_pages_url');
-		return str_replace('{logout_url}', wp_logout_url($options['url_page_redirect_after_logout']), clu_get_message('already_logged_in'));
+		return str_replace('{logout_url}', wp_logout_url($options['url_page_redirect_after_logout']), clu_render_message('already_logged_in'));
 
 		
 	}else{
@@ -66,5 +66,3 @@ function render_login_form( $attributes, $content = null ) {
 		return custom_login_users_get_template_html( 'form_login', $attributes );
 	}
 }
-
-?>

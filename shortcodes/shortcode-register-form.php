@@ -21,10 +21,10 @@ function render_register_form( $attributes, $content = null ) {
 	$attributes = shortcode_atts( $default_attributes, $attributes );
 
 	if ( is_user_logged_in() ) {
-		return clu_get_message('user_logged_in_register');
+		return clu_render_message('user_logged_in_register');
 
 	} elseif ( ! get_option( 'users_can_register' ) ) {
-		return clu_get_message('registration_disabled');
+		return clu_render_message('registration_disabled');
 
 	} else {
 		// Retrieve possible errors from request parameters
@@ -42,6 +42,3 @@ function render_register_form( $attributes, $content = null ) {
 	}
 
 }
-
-
-?>

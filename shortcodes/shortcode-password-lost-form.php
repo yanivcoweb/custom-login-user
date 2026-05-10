@@ -33,7 +33,4 @@ function render_password_lost_form( $attributes, $content = null ) {
 		}
 		return custom_login_users_get_template_html( 'form_password_lost', $attributes );
 	}
-}	
-
-
-?>
+}

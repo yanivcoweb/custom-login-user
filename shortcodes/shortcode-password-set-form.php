@@ -90,14 +90,14 @@ function render_password_set_form($attributes, $content = null) {
 			$reset_key = sanitize_text_field($_GET['key'] ?? '');
 
 			if (!$user_login || !$reset_key) {
-				$errors[] = clu_get_message('invalid_reset_link_page');
+				$errors[] = clu_render_message('invalid_reset_link_page');
 
 			} else {
 				// Validate the reset key
 				$user = check_password_reset_key($reset_key, $user_login);
 
 				if (is_wp_error($user)) {
-					$errors[] = clu_get_message('expired_reset_link_page');
+					$errors[] = clu_render_message('expired_reset_link_page');
 
 					error_log('Key validation failed: ' . $user->get_error_message());
 				}
@@ -114,6 +114,3 @@ function render_password_set_form($attributes, $content = null) {
 	
 	
 }
-
-
-?>

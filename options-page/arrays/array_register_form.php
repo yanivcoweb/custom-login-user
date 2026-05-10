@@ -56,6 +56,3 @@ return [
         'default' => 'Invalid email address'
     ]
 ];
-
-
-?> 

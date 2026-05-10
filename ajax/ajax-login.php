@@ -15,7 +15,7 @@ function handle_ajax_login_user() {
         wp_send_json([
             'success' => false,
             // 'data' => ['message' => 'Invalid request.']
-			'data' => ['message' => clu_get_message('invalid_nonce')]
+			'data' => ['message' => clu_render_message('invalid_nonce')]
         ]);
     }
 
@@ -31,22 +31,30 @@ function handle_ajax_login_user() {
     // $user = wp_signon($credentials, false);
     $user = wp_signon($credentials, is_ssl());
 
+    $options = get_option('clu_pages_url');
+
     if (is_wp_error($user)) {
+        $error_message = $user->get_error_message();
+        // Replace the default WP lost-password URL with the one from settings
+        if ( !empty($options['url_page_password_lost']) ) {
+            $error_message = preg_replace(
+                '/href=["\'].*?action=lostpassword["\']/',
+                'href="' . esc_url($options['url_page_password_lost']) . '"',
+                $error_message
+            );
+        }
         wp_send_json([
             'success' => false,
-            'data' => ['message' => $user->get_error_message()]
+            'data' => ['message' => $error_message]
         ]);
 		exit;
     }
-
-	
-	$options = get_option('clu_pages_url');
 
     wp_send_json([
         'success' => true,
         'data' => [
             // 'message' => 'Login successful!',
-			'message' => clu_get_message('login_success'),
+			'message' => clu_render_message('login_success'),
 			'redirect' => $options['url_page_redirect_after_login']
         ]
     ]);
@@ -54,7 +62,3 @@ function handle_ajax_login_user() {
 	exit;
 	
 }
-
-
-
-?>

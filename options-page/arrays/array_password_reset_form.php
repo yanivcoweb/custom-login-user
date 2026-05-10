@@ -26,6 +26,3 @@ return [
         'default' => 'Reset Password'
     ]
 ];
-
-
-?> 

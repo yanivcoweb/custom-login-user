@@ -86,5 +86,3 @@ return [
         'default' => 'Required field'
     ]
 ];
-
-?> 

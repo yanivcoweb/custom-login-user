@@ -14,6 +14,16 @@ function clu_get_message($key) {
 }
 
 /**
+ * Returns a message formatted for HTML output — converts bare newlines to <br> tags.
+ *
+ * @param string $key
+ * @return string
+ */
+function clu_render_message($key) {
+    return clu_email_body_format(clu_get_message($key));
+}
+
+/**
  * Returns all default (fallback) message strings.
  *
  * @return array

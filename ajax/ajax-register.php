@@ -9,7 +9,7 @@ function handle_ajax_register_user() {
     // Check the nonce
     if (!isset($_POST['register_nonce']) || !wp_verify_nonce($_POST['register_nonce'], 'register_form_nonce')) {
         // wp_send_json_error(['message' => 'Security check failed.']);
-		wp_send_json_error(['message' => clu_get_message('invalid_nonce')]);
+		wp_send_json_error(['message' => clu_render_message('invalid_nonce')]);
     }
 
     // Sanitize input data
@@ -21,14 +21,14 @@ function handle_ajax_register_user() {
     // Validate required fields
     if (empty($email) || empty($first_name) || empty($last_name)) {
         // wp_send_json_error(['message' => 'Please fill in all required fields.']);
-		wp_send_json_error(['message' => clu_get_message('register_required_fields')]);
+		wp_send_json_error(['message' => clu_render_message('register_required_fields')]);
 
     }
 
     // Check if the email is already registered
     if (email_exists($email)) {
         // wp_send_json_error(['message' => 'This email address is already registered.']);
-		wp_send_json_error(['message' => clu_get_message('email_already_registered')]);
+		wp_send_json_error(['message' => clu_render_message('email_already_registered')]);
 
     }
 
@@ -74,7 +74,5 @@ function handle_ajax_register_user() {
 	
 	
 
-    wp_send_json_success(['message' => clu_get_message('register_success')]);
+    wp_send_json_success(['message' => clu_render_message('register_success')]);
 }
-
-?>

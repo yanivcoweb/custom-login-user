@@ -1,4 +1,18 @@
-<?php 
+<?php
+
+/**
+ * Formats an email body for HTML sending.
+ * If the text already contains HTML tags (e.g. <br>, <p>, <a>) it is returned as-is.
+ * Otherwise newlines are converted to <br> tags so plain-text textarea input renders correctly.
+ *
+ * @param string $text
+ * @return string
+ */
+function clu_email_body_format( $text ) {
+    return ( strpos( $text, '<br' ) !== false || strpos( $text, '<p' ) !== false )
+        ? $text
+        : nl2br( $text );
+}
 
 /**
  * Renders the contents of the given template to a string and returns it.
@@ -135,13 +149,13 @@ function notify_client_on_new_user_with_custom_role($user_id)
 
 function send_email_notify_client_on_new_user_with_custom_role($user_id )
 {
-	error_log(' functions.php - function send_email_notify_client_on_new_user_with_custom_role' );	
+	error_log(' functions.php - function send_email_notify_client_on_new_user_with_custom_role' );
 	$site_url = get_bloginfo('wpurl');
 	$host = $_SERVER['HTTP_HOST'];
-	$headers = "MIME-Version: 1.0\r\n";
-	$headers.= "Content-Type: text/html;charset=UTF-8\r\n";
-	$headers.= "From: ".$site_url."  <info@".$host.">\r\n";
-	$headers.= "X-Mailer: PHP/" . phpversion();		
+	$headers = [
+		'Content-Type: text/html; charset=UTF-8',
+		'From: ' . $site_url . ' <info@' . $host . '>',
+	];		
 	$user = get_userdata( $user_id );
 	//$subject = sprintf( ' #001-%s Website: %s sign up for a free trial', time(), $user->display_name);
 	// $subject = sprintf( 'Website: %s register', $user->display_name);
@@ -153,23 +167,17 @@ function send_email_notify_client_on_new_user_with_custom_role($user_id )
 	$subject  = sprintf(clu_get_message('notify_client_subject'), $user->display_name);
 	$edit_url = $host . '/wp-admin/user-edit.php?user_id=' . $user_id . '#role';
 	$message  = sprintf(clu_get_message('notify_client_body'), $user->display_name, $edit_url);
+	$message  = clu_email_body_format( $message );
 
 	//$message .= '[for debug: send_admin_trial_att_email() at inc/init_mailers.php]';	
 
-	//$to= 'yaniv.sasson.mail@gmail.com, yaniv@coweb.co.il';
-	$options = get_option('clu_mail'); 
-	$to =  $options['admin_mail_addresss'] ;
-	// error_log(' $to ' );	
-	// error_log($to);	
-	// $to = preg_replace('/[[:^print:]]/', '', $to);
-	// error_log(print_r($to, true));	
-	// Convert string to array
-	$array = explode(',', $to);
+	$options = get_option('clu_mail');
+	$raw_to  = $options['admin_mail_addresss'] ?? '';
 
-	// Convert array back to a comma-separated string (in this case, it's unnecessary but still works)
-	$admin_email_1 = implode(',', $array);
-	// $to = get_field('email_notification','options');
-	wp_mail($to,  $subject ,$message ,$headers );
+	// Support multiple comma-separated addresses; trim spaces around each
+	$to = implode( ',', array_filter( array_map( 'trim', explode( ',', $raw_to ) ) ) );
+
+	wp_mail( $to, $subject, $message, $headers );
 }
 
 
@@ -188,13 +196,13 @@ function notify_user_on_role_change_with_password_reset($user_id, $new_role, $ol
 
 function send_email_notify_user_to_set_password($user_id )
 {
-	error_log(' functions.php - function send_email_notify_user_to_set_password' );	
+	error_log(' functions.php - function send_email_notify_user_to_set_password' );
 	$site_url = get_bloginfo('wpurl');
 	$host = $_SERVER['HTTP_HOST'];
-	$headers = "MIME-Version: 1.0\r\n";
-	$headers.= "Content-Type: text/html;charset=UTF-8\r\n";
-	$headers.= "From: ".$site_url."  <info@".$host.">\r\n";
-	$headers.= "X-Mailer: PHP/" . phpversion();		
+	$headers = [
+		'Content-Type: text/html; charset=UTF-8',
+		'From: ' . $site_url . ' <info@' . $host . '>',
+	];		
 	$user = get_userdata( $user_id );
 	//$subject = sprintf( ' #001-%s Website: %s sign up for a free trial', time(), $user->display_name);
 	$reset_key = get_password_reset_key($user);
@@ -221,6 +229,7 @@ function send_email_notify_user_to_set_password($user_id )
 		
 	$subject = sprintf(clu_get_message('notify_user_subject'), $user->display_name);
 	$message = sprintf(clu_get_message('notify_user_body'), $user->display_name, $reset_url);
+	$message = clu_email_body_format( $message );
 	//$message .= '[for debug: send_admin_trial_att_email() at inc/init_mailers.php]';	
 
 	//$to= 'yaniv.sasson.mail@gmail.com, yaniv@coweb.co.il';
@@ -233,8 +242,3 @@ function send_email_notify_user_to_set_password($user_id )
 add_filter('password_reset_expiration', function ($expiration) {
     return DAY_IN_SECONDS * 7; // Extend to 7 days
 });
-
-
-
-
-?>

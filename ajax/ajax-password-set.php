@@ -9,14 +9,14 @@ function handle_ajax_password_set() {
     
 	if (!isset($_POST['set_password_nonce']) || !wp_verify_nonce($_POST['set_password_nonce'], 'set_password_form_nonce')) {
         // wp_send_json_error(['message' => 'Invalid nonce.']);
-		wp_send_json_error(['message' => clu_get_message('invalid_nonce')]);
+		wp_send_json_error(['message' => clu_render_message('invalid_nonce')]);
         exit;
     }
 	
 	// Check for required parameters
     if (empty($_REQUEST['rp_key']) || empty($_REQUEST['rp_login']) || empty($_POST['new_password'])) {
         // wp_send_json_error(['message' => 'Missing required fields.']);
-		wp_send_json_error(['message' => clu_get_message('password_set_missing_fields')]);
+		wp_send_json_error(['message' => clu_render_message('password_set_missing_fields')]);
     }
 
     $rp_key = $_REQUEST['rp_key'];
@@ -28,7 +28,7 @@ function handle_ajax_password_set() {
 
     if (is_wp_error($user)) {
         // wp_send_json_error(['message' => 'Invalid or expired password reset link.']);
-		wp_send_json_error(['message' => clu_get_message('invalid_reset_link')]);
+		wp_send_json_error(['message' => clu_render_message('invalid_reset_link')]);
 
     }
 
@@ -88,7 +88,7 @@ function handle_ajax_password_set() {
         'success' => true,
         'data' => [
             //'message' => 'Your password has been successfully reset.',
-            'message' => clu_get_message('password_reset_success'),
+            'message' => clu_render_message('password_reset_success'),
 			'redirect' => $options['url_page_redirect_after_password_set']
         ]
     ]);
@@ -96,7 +96,3 @@ function handle_ajax_password_set() {
 	// wp_redirect( home_url( 'investor-zone-files' ) ); // רצוי לא להסתמך על הסלאג
 	
 }
-
-
-
-?>

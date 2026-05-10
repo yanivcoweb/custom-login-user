@@ -117,5 +117,3 @@ return  [
         'default' => 'Please enter a new password.'
     ]
 ];
-
-?> 
