@@ -1,17 +1,82 @@
 <?php
 
 /**
- * Formats an email body for HTML sending.
- * If the text already contains HTML tags (e.g. <br>, <p>, <a>) it is returned as-is.
- * Otherwise newlines are converted to <br> tags so plain-text textarea input renders correctly.
+ * Formats editable message text for HTML output.
+ * Allows safe HTML and converts textarea newlines into HTML line breaks.
  *
  * @param string $text
  * @return string
  */
 function clu_email_body_format( $text ) {
-    return ( strpos( $text, '<br' ) !== false || strpos( $text, '<p' ) !== false )
-        ? $text
-        : nl2br( $text );
+    $text = str_replace( [ "\r\n", "\r" ], "\n", (string) $text );
+    $text = wp_kses_post( $text );
+
+    if ( preg_match( '/<(p|div|h[1-6]|ul|ol|li|table|tr|td|th|blockquote)\b/i', $text ) ) {
+        return $text;
+    }
+
+    return nl2br( $text, false );
+}
+
+/**
+ * Builds a safe HTML link for messages.
+ *
+ * @param string $url
+ * @param string $label
+ * @return string
+ */
+function clu_message_link( $url, $label = 'Link' ) {
+    return sprintf(
+        '<a href="%s" target="_blank" rel="noopener">%s</a>',
+        esc_url( $url ),
+        esc_html( $label )
+    );
+}
+
+/**
+ * Applies supported placeholders and formats a message for HTML output.
+ *
+ * @param string $template
+ * @param array  $replacements
+ * @return string
+ */
+function clu_format_message_template( $template, $replacements ) {
+    $template = (string) $template;
+
+    foreach ( $replacements as $placeholder => $value ) {
+        $template = str_replace( $placeholder, $value, $template );
+    }
+
+    return clu_email_body_format( $template );
+}
+
+/**
+ * Sanitizes editable message templates while preserving placeholders.
+ *
+ * WordPress may strip placeholders such as %2$s or {logout_url} when they
+ * appear inside HTML attributes before they are replaced with real URLs.
+ *
+ * @param string $text
+ * @return string
+ */
+function clu_sanitize_message_template( $text ) {
+    $text         = str_replace( [ "\r\n", "\r" ], "\n", (string) $text );
+    $placeholders = [];
+
+    $text = preg_replace_callback(
+        '/%(\d+\$)?s|\{[a-z0-9_]+\}/i',
+        function ( $matches ) use ( &$placeholders ) {
+            $token                  = 'clu-placeholder-' . count( $placeholders );
+            $placeholders[ $token ] = $matches[0];
+
+            return $token;
+        },
+        $text
+    );
+
+    $text = wp_kses_post( $text );
+
+    return str_replace( array_keys( $placeholders ), array_values( $placeholders ), $text );
 }
 
 /**
@@ -166,8 +231,16 @@ function send_email_notify_client_on_new_user_with_custom_role($user_id )
 	// $message .= '<a href="'.$host.'/wp-admin/user-edit.php?user_id='.$user_id.'#role">Edit User</a><br><br>';	
 	$subject  = sprintf(clu_get_message('notify_client_subject'), $user->display_name);
 	$edit_url = $host . '/wp-admin/user-edit.php?user_id=' . $user_id . '#role';
-	$message  = sprintf(clu_get_message('notify_client_body'), $user->display_name, $edit_url);
-	$message  = clu_email_body_format( $message );
+	$message  = clu_format_message_template(
+		clu_get_message('notify_client_body'),
+		[
+			'%1$s'            => $user->display_name,
+			'%2$s'            => $edit_url,
+			'{display_name}'  => $user->display_name,
+			'{edit_user_url}' => $edit_url,
+			'{edit_user_link}' => clu_message_link( $edit_url, 'Edit User' ),
+		]
+	);
 
 	//$message .= '[for debug: send_admin_trial_att_email() at inc/init_mailers.php]';	
 
@@ -228,8 +301,16 @@ function send_email_notify_user_to_set_password($user_id )
         // );
 		
 	$subject = sprintf(clu_get_message('notify_user_subject'), $user->display_name);
-	$message = sprintf(clu_get_message('notify_user_body'), $user->display_name, $reset_url);
-	$message = clu_email_body_format( $message );
+	$message = clu_format_message_template(
+		clu_get_message('notify_user_body'),
+		[
+			'%1$s'             => $user->display_name,
+			'%2$s'             => $reset_url,
+			'{display_name}'   => $user->display_name,
+			'{set_password_url}' => $reset_url,
+			'{set_password_link}' => clu_message_link( $reset_url, 'Link' ),
+		]
+	);
 	//$message .= '[for debug: send_admin_trial_att_email() at inc/init_mailers.php]';	
 
 	//$to= 'yaniv.sasson.mail@gmail.com, yaniv@coweb.co.il';

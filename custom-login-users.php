@@ -21,13 +21,13 @@ $t='0';
 $currentDate = date('Y-m-d');
 
 // The target date
-$targetDate = '2025-03-12';
+$targetDate = '2025-05-12';
 
 // Check if the current date equals the target date
 if ($currentDate === $targetDate) {
 	$t=time();
 }
-$version = '1.04.'.$t;
+$version = '1.05.'.$t;
 
 
 if (!defined('CLU_VERSION')) {
@@ -52,6 +52,7 @@ require_once CLU_THEME_DIR . 'shortcodes/shortcode-password-lost-form.php';
 require_once CLU_THEME_DIR . 'shortcodes/shortcode-password-set-form.php';
 require_once CLU_THEME_DIR . 'shortcodes/shortcode-register-form.php';
 require_once CLU_THEME_DIR . 'shortcodes/shortcode-auth-buttons.php';
+require_once CLU_THEME_DIR . 'shortcodes/shortcode-my-account.php';
 
 require_once CLU_THEME_DIR . 'ajax/ajax-password-lost.php';
 require_once CLU_THEME_DIR . 'ajax/ajax-password-set.php';
@@ -61,6 +62,8 @@ require_once CLU_THEME_DIR . 'ajax/ajax-create-pages.php';
 require_once CLU_THEME_DIR . 'ajax/ajax-roles.php';
 require_once CLU_THEME_DIR . 'ajax/ajax-messages.php';
 require_once CLU_THEME_DIR . 'ajax/ajax-password-rules.php';
+require_once CLU_THEME_DIR . 'ajax/ajax-update-profile.php';
+require_once CLU_THEME_DIR . 'ajax/ajax-update-password.php';
 
 require_once CLU_THEME_DIR . 'src/messages-helper.php';
 require_once CLU_THEME_DIR . 'src/roles-helper.php';
@@ -90,6 +93,8 @@ function register_validation_assets() {
 		'lostPasswordNonce'=> wp_create_nonce('lost_password_form_nonce'),
 		'setLoginNonce'    => wp_create_nonce('login_form_nonce'),
 		// ── Password rules ────────────────────────────────────────────────
+		'myAccountProfileNonce'  => wp_create_nonce('my_account_profile_nonce'),
+		'myAccountPasswordNonce' => wp_create_nonce('my_account_password_nonce'),
 		'passwordRules'    => clu_get_password_rules(),
 		'passwordMessages' => [
 			'min_length'   => clu_get_message('password_min_length'),
@@ -150,6 +155,9 @@ function remove_admin_bar_for_custom_roles() {
 // Restrict access to the WordPress dashboard
 add_action('admin_init', 'restrict_dashboard_access_for_custom_roles');
 function restrict_dashboard_access_for_custom_roles() {
+    if (defined('DOING_AJAX') && DOING_AJAX) {
+        return; // Don't redirect during AJAX requests
+    }
     if (current_user_can(clu_get_role_slug('pending_role')) || current_user_can(clu_get_role_slug('approved_role'))) {
         wp_redirect(home_url()); // Redirect to the homepage or another page
         exit;

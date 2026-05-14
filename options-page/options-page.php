@@ -366,16 +366,16 @@ function clu_render_messages_tab() {
         ],
         'Email Templates' => [
             'reset_email_subject'   => 'Password reset email — subject',
-            'reset_email_body'      => 'Password reset email — body (<code>%1$s</code> = name, <code>%2$s</code> = reset URL)',
+            'reset_email_body'      => 'Password reset email — body (<code>{display_name}</code> = name, <code>{reset_url}</code> = reset URL, <code>{reset_link}</code> = linked "Link")',
             'notify_client_subject' => 'New registration email to admin — subject (<code>%s</code> = name)',
-            'notify_client_body'    => 'New registration email to admin — body (<code>%1$s</code> = name, <code>%2$s</code> = edit user URL)',
+            'notify_client_body'    => 'New registration email to admin — body (<code>{display_name}</code> = name, <code>{edit_user_url}</code> = edit user URL, <code>{edit_user_link}</code> = linked "Edit User")',
             'notify_user_subject'   => 'Account approved email to user — subject (<code>%s</code> = name)',
-            'notify_user_body'      => 'Account approved email to user — body (<code>%1$s</code> = name, <code>%2$s</code> = set-password URL)',
+            'notify_user_body'      => 'Account approved email to user — body (<code>{display_name}</code> = name, <code>{set_password_url}</code> = set-password URL, <code>{set_password_link}</code> = linked "Link")',
         ],
     ];
 
-    // Keys that need a textarea instead of a text input
-    $textarea_keys = ['already_logged_in', 'reset_email_body', 'notify_client_body', 'notify_user_body'];
+    $textarea_keys = [];
+    $editor_keys   = ['already_logged_in', 'reset_email_body', 'notify_client_body', 'notify_user_body'];
     ?>
     <h2>Plugin Messages</h2>
     <p>Edit the text shown to users. Leave a field blank to use the built-in default.</p>
@@ -386,11 +386,30 @@ function clu_render_messages_tab() {
             <?php foreach ($fields as $key => $label) :
                 $current = $val($key);
                 $is_textarea = in_array($key, $textarea_keys, true);
+                $is_editor   = in_array($key, $editor_keys, true);
             ?>
             <tr>
                 <th><label for="clu-msg-<?php echo esc_attr($key); ?>"><?php echo wp_kses_post($label); ?></label></th>
                 <td>
-                    <?php if ($is_textarea) : ?>
+                    <?php if ($is_editor) : ?>
+                        <?php
+                        wp_editor(
+                            $current,
+                            'clu_msg_' . str_replace('-', '_', $key),
+                            [
+                                'textarea_name' => $key,
+                                'textarea_rows' => 7,
+                                'media_buttons' => false,
+                                'teeny'         => true,
+                                'quicktags'     => true,
+                                'tinymce'       => [
+                                    'toolbar1' => 'bold,italic,bullist,numlist,link,unlink,undo,redo',
+                                    'toolbar2' => '',
+                                ],
+                            ]
+                        );
+                        ?>
+                    <?php elseif ($is_textarea) : ?>
                         <textarea id="clu-msg-<?php echo esc_attr($key); ?>"
                                   name="<?php echo esc_attr($key); ?>"
                                   class="large-text"
@@ -425,13 +444,12 @@ function clu_render_messages_tab() {
             var $result  = $('#clu-messages-result');
             var data     = { action: 'clu_save_messages', nonce: nonce };
 
+            if (window.tinyMCE) {
+                tinyMCE.triggerSave();
+            }
+
             $('input[name], textarea[name]', '#<?php echo esc_js($tab_id ?? 'messages'); ?>').each(function(){
                 data[$(this).attr('name')] = $(this).val();
-            });
-
-            // Collect all named inputs/textareas in this tab
-            $('#clu-msg-invalid_nonce, #clu-msg-general_error, #clu-msg-login_success, #clu-msg-register_required_fields, #clu-msg-email_already_registered, #clu-msg-register_success, #clu-msg-email_required, #clu-msg-user_not_found, #clu-msg-reset_email_send_failed, #clu-msg-reset_email_sent, #clu-msg-password_set_missing_fields, #clu-msg-invalid_reset_link, #clu-msg-password_min_length, #clu-msg-password_uppercase, #clu-msg-password_lowercase, #clu-msg-password_number, #clu-msg-password_special_char, #clu-msg-password_reset_success, #clu-msg-already_logged_in, #clu-msg-user_logged_in_register, #clu-msg-registration_disabled, #clu-msg-invalid_reset_link_page, #clu-msg-expired_reset_link_page, #clu-msg-logout_button_text, #clu-msg-login_button_text, #clu-msg-register_button_text, #clu-msg-reset_email_subject, #clu-msg-reset_email_body, #clu-msg-notify_client_subject, #clu-msg-notify_client_body, #clu-msg-notify_user_subject, #clu-msg-notify_user_body').each(function(){
-                data[$(this).attr('id').replace('clu-msg-', '')] = $(this).val();
             });
 
             $btn.prop('disabled', true);
@@ -465,7 +483,16 @@ function clu_render_messages_tab() {
                     // Populate fields with returned defaults
                     $.each(response.data.defaults, function(key, value){
                         var $el = $('#clu-msg-' + key);
-                        $el.val(value);
+                        if ($el.length) {
+                            $el.val(value);
+                            return;
+                        }
+
+                        var editorId = 'clu_msg_' + key.replace(/-/g, '_');
+                        if (window.tinyMCE && tinyMCE.get(editorId)) {
+                            tinyMCE.get(editorId).setContent(value);
+                        }
+                        $('#' + editorId).val(value);
                     });
                     var cls = 'notice-success';
                     $result.html('<div class="notice ' + cls + ' inline"><p>' + response.data.message + '</p></div>');
@@ -705,8 +732,9 @@ function clu_render_setup_pages_tab() {
             'shortcode' => '[custom-password-lost-form]',
         ],
         [
-            'title' => 'My Account',
-            'slug'  => 'my-account',
+            'title'     => 'My Account',
+            'slug'      => 'my-account',
+            'shortcode' => '[my-account]',
         ],
         [
             'title' => 'Logged Out',

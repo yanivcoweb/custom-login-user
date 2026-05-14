@@ -59,7 +59,16 @@ function handle_ajax_password_lost() {
         // $reset_url
     // );
 	$email_subject = clu_get_message('reset_email_subject');
-	$email_message = clu_email_body_format( sprintf(clu_get_message('reset_email_body'), $user_data->display_name, $reset_url) );
+	$email_message = clu_format_message_template(
+        clu_get_message('reset_email_body'),
+        [
+            '%1$s'          => $user_data->display_name,
+            '%2$s'          => $reset_url,
+            '{display_name}' => $user_data->display_name,
+            '{reset_url}'   => $reset_url,
+            '{reset_link}'  => clu_message_link( $reset_url, 'Link' ),
+        ]
+    );
 
 
     // Send the email
@@ -67,7 +76,7 @@ function handle_ajax_password_lost() {
         $user_data->user_email,
         $email_subject,
         $email_message,
-        ['Content-Type: text/plain; charset=UTF-8']
+        ['Content-Type: text/html; charset=UTF-8']
     );
 
     // Check if the email was sent successfully

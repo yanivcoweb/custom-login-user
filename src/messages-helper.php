@@ -77,20 +77,29 @@ function clu_default_messages() {
         'register_button_text'       => 'Register',
 
         // ── Email: Password Lost (sent to user) ──────────────────────────
-        // %1$s = display name, %2$s = reset URL
+        // {display_name} = display name, {reset_url} = reset URL, {reset_link} = linked "Link"
         'reset_email_subject'        => 'Password Reset Request',
-        'reset_email_body'           => "Hello %1\$s,\n\nWe received a request to reset your password. Please click the link below to reset your password:\n\n%2\$s\n\nIf you did not request this, you can ignore this email.",
+        'reset_email_body'           => "Hello {display_name},\n\nWe received a request to reset your password. Please click the link below to reset your password:\n\n{reset_link}\n\nIf you did not request this, you can ignore this email.",
 
         // ── Email: New Registration (sent to admin) ──────────────────────
         // %s = display name
         'notify_client_subject'      => 'Website: New registration by %s',
-        // %1$s = display name, %2$s = edit user URL
-        'notify_client_body'         => "Hello,<br><br>%1\$s has registered on the website.<br><br>To approve the registration, click the link below and change the user role from \"Pending User\" to \"Approved User\": <a href=\"%2\$s\">Edit User</a><br><br>",
+        // {display_name} = display name, {edit_user_url} = edit URL, {edit_user_link} = linked "Edit User"
+        'notify_client_body'         => "Hello,<br><br>{display_name} has registered on the website.<br><br>To approve the registration, click the link below and change the user role from \"Pending User\" to \"Approved User\": {edit_user_link}<br><br>",
+
+        // ── Shortcode: My Account ────────────────────────────────────────────
+        'my_account_not_logged_in'      => 'You must be logged in to view this page.',
+        'profile_update_success'        => 'Your profile has been updated successfully.',
+        'profile_update_missing_fields' => 'Please fill in all required fields.',
+        'profile_email_taken'           => 'This email address is already in use by another account.',
+        'password_update_success'       => 'Your password has been changed successfully.',
+        'password_current_incorrect'    => 'The current password you entered is incorrect.',
+        'password_confirm_mismatch'     => 'The new passwords do not match.',
 
         // ── Email: Account Approved (sent to user) ───────────────────────
         // %s = display name
         'notify_user_subject'        => 'Website: Account approved for %s',
-        // %1$s = display name, %2$s = reset URL
-        'notify_user_body'           => "Hello,<br><br>%1\$s, your account has been approved!<br><br>Hi %1\$s,\n\nYour account has been approved successfully!\n\nTo set your password and access your account, click the following link:\n\n%2\$s\n\nIf you have any questions, please contact us.\n\nThank you.",
+        // {display_name} = display name, {set_password_url} = reset URL, {set_password_link} = linked "Link"
+        'notify_user_body'           => "Hello,<br><br>{display_name}, your account has been approved!<br><br>To set your password and access your account, click the following link:<br><br>{set_password_link}<br><br>If you have any questions, please contact us.<br><br>Thank you.",
     ];
 }

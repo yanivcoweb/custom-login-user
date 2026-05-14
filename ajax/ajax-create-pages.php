@@ -37,6 +37,7 @@ function clu_create_pages_handler() {
         [
             'title'     => 'My Account',
             'slug'      => 'my-account',
+            'shortcode' => '[my-account]',
             'url_field' => 'url_page_redirect_after_login',
         ],
         [

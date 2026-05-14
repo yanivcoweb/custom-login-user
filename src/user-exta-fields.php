@@ -12,6 +12,9 @@ function save_extra_user_profile_fields( $user_id ) {
 		return false; 
 	}
 	update_user_meta( $user_id, 'company', $_POST['company'] );
+	update_user_meta( $user_id, 'customer_type', sanitize_text_field( $_POST['customer_type'] ?? '' ) );
+	update_user_meta( $user_id, 'region',        sanitize_text_field( $_POST['region']        ?? '' ) );
+	update_user_meta( $user_id, 'country',       sanitize_text_field( $_POST['country']       ?? '' ) );
 	// update_user_meta( $user_id, 'phone', $_POST['phone'] );
 	//update_user_meta( $user_id, 'address', $_POST['address'] );
 	//update_user_meta( $user_id, 'birthday', $_POST['birthday'] );	

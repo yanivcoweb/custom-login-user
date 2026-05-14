@@ -17,6 +17,9 @@ function handle_ajax_register_user() {
     $first_name = sanitize_text_field($_POST['first_name']);
     $last_name = sanitize_text_field($_POST['last_name']);
     $company = sanitize_text_field($_POST['company']);
+    $customer_type = sanitize_text_field($_POST['customer_type'] ?? '');
+    $region        = sanitize_text_field($_POST['region'] ?? '');
+    $country       = sanitize_text_field($_POST['country'] ?? '');
 
     // Validate required fields
     if (empty($email) || empty($first_name) || empty($last_name)) {
@@ -68,6 +71,9 @@ function handle_ajax_register_user() {
 
     // Add custom meta
     update_user_meta($user_id, 'company', $company);
+    update_user_meta($user_id, 'customer_type', $customer_type);
+    update_user_meta($user_id, 'region', $region);
+    update_user_meta($user_id, 'country', $country);
 
     // Optionally send an email with the credentials
     //wp_new_user_notification($user_id, null, 'user');

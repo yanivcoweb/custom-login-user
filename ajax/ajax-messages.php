@@ -19,7 +19,7 @@ function clu_save_messages_handler() {
             $value = wp_unslash($_POST[$key]);
             $saved[$key] = in_array($key, $subject_keys, true)
                 ? sanitize_text_field($value)
-                : wp_kses_post($value);
+                : clu_sanitize_message_template($value);
         }
     }
 

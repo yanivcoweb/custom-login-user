@@ -125,17 +125,28 @@ document.addEventListener('DOMContentLoaded', function () {
 		const passwordInput = form.querySelector('input[type="password"][custom-required]');
 		if (passwordInput) {
 			const passwordValue = passwordInput.value.trim();
-			const errors = validatePassword(passwordValue);
-
 			const errorMessageContainer = form.querySelector(`.error-message[data-inputid="${passwordInput.id}"]`);
-			if (errors.length > 0) {
-				isValid = false;
-				if (errorMessageContainer) {
-					errorMessageContainer.innerHTML = errors.map(error => `<p>${error}</p>`).join("");
-					errorMessageContainer.style.display = "block";
+
+			if (form.id === 'loginform') {
+				// Login: only check not empty
+				if (!passwordValue) {
+					isValid = false;
+					if (errorMessageContainer) errorMessageContainer.style.display = 'block';
+				} else {
+					if (errorMessageContainer) errorMessageContainer.style.display = 'none';
 				}
 			} else {
-				errorMessageContainer.style.display = "none";
+				// Set/reset password forms: apply strength validation
+				const errors = validatePassword(passwordValue);
+				if (errors.length > 0) {
+					isValid = false;
+					if (errorMessageContainer) {
+						errorMessageContainer.innerHTML = errors.map(error => `<p>${error}</p>`).join('');
+						errorMessageContainer.style.display = 'block';
+					}
+				} else {
+					if (errorMessageContainer) errorMessageContainer.style.display = 'none';
+				}
 			}
 		}
 
@@ -201,6 +212,12 @@ document.addEventListener('DOMContentLoaded', function () {
 							break;
 						case 'setpassform':
 							await set_password(form, event);
+							break;
+						case 'my-account-profile-form':
+							await update_profile(form, event);
+							break;
+						case 'my-account-password-form':
+							await update_password(form, event);
 							break;
 						default:
 							console.error(`Unknown form ID: ${form.id}`);
@@ -355,6 +372,80 @@ async function lost_password(form, event) {
 }
 
 
+async function update_profile(form, event) {
+	console.log('function update_profile');
+	event.preventDefault();
+
+	const formData = new FormData(form);
+	const responseElement = document.getElementById('my-account-profile-response');
+	responseElement.textContent = 'Saving...';
+	responseElement.style.color = 'black';
+
+	try {
+		const response = await fetch(ajaxData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+		});
+
+		const result = await response.json();
+
+		if (result.success) {
+			responseElement.innerHTML = result.data.message;
+			responseElement.style.color = 'green';
+		} else {
+			responseElement.innerHTML = result.data.message;
+			responseElement.style.color = 'red';
+		}
+	} catch (error) {
+		console.error('Fetch error:', error);
+		responseElement.textContent = 'An error occurred. Please try again.';
+		responseElement.style.color = 'red';
+	}
+}
+
+
+async function update_password(form, event) {
+	console.log('function update_password');
+	event.preventDefault();
+
+	const newPass     = form.querySelector('#new_password').value;
+	const confirmPass = form.querySelector('#confirm_password').value;
+	const responseElement = document.getElementById('my-account-password-response');
+
+	if (newPass !== confirmPass) {
+		responseElement.textContent = 'The new passwords do not match.';
+		responseElement.style.color = 'red';
+		return;
+	}
+
+	const formData = new FormData(form);
+	responseElement.textContent = 'Saving...';
+	responseElement.style.color = 'black';
+
+	try {
+		const response = await fetch(ajaxData.ajaxurl, {
+			method: 'POST',
+			body: formData,
+		});
+
+		const result = await response.json();
+
+		if (result.success) {
+			responseElement.innerHTML = result.data.message;
+			responseElement.style.color = 'green';
+			form.reset();
+		} else {
+			responseElement.innerHTML = result.data.message;
+			responseElement.style.color = 'red';
+		}
+	} catch (error) {
+		console.error('Fetch error:', error);
+		responseElement.textContent = 'An error occurred. Please try again.';
+		responseElement.style.color = 'red';
+	}
+}
+
+
 async function login_user(form, event) {
 	console.log('function login_user');
     event.preventDefault();
@@ -373,39 +464,25 @@ async function login_user(form, event) {
 		
 		const response = await fetch(ajaxData.ajaxurl, {
 			method: 'POST',
-			mode: 'no-cors',  // Prevent CORS error
 			body: formData,
 		});
-		
-		const text = await response.text(); // Get the raw response as text
-		console.log(text);
-      
-        if (!text.trim()) {
-			console.log('aa');
-			window.location.reload();
-          
-        }else{
-			console.log('bb');
 
-			const result = JSON.parse(text); // Parse it as JSON
-			console.log('Parsed JSON:', result);
+		const result = await response.json();
+		console.log('Parsed JSON:', result);
 
-			if (result.success) {
-				responseElement.innerHTML = result.data.message;
-				responseElement.style.color = 'green';
-				form.reset(); // Clear the form on success
-				 
-				 // Redirect to the provided URL
-				if (result.data.redirect) {
-					console.log('result.data.redirect:', result.data.redirect);
-					window.location.href = result.data.redirect;
-				}
-				
-			} else {
-				responseElement.innerHTML = result.data.message;
-				responseElement.style.color = 'red';
+		if (result.success) {
+			responseElement.innerHTML = result.data.message;
+			responseElement.style.color = 'green';
+			form.reset(); // Clear the form on success
+
+			// Redirect to the provided URL
+			if (result.data.redirect) {
+				console.log('result.data.redirect:', result.data.redirect);
+				window.location.href = result.data.redirect;
 			}
-			
+		} else {
+			responseElement.innerHTML = result.data.message;
+			responseElement.style.color = 'red';
 		}
 
 	} catch (error) {
