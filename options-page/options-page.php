@@ -187,7 +187,32 @@ function my_custom_settings_init() {
             continue;
         }
 
-        register_setting($tab['settings_group'], $tab['option_name']);
+        $fields = include $tab['fields_file'];
+
+        register_setting(
+            $tab['settings_group'],
+            $tab['option_name'],
+            [
+                'sanitize_callback' => function ( $input ) use ( $fields ) {
+                    $input = is_array( $input ) ? $input : [];
+                    $clean = [];
+
+                    foreach ( $fields as $field ) {
+                        $key   = $field['field'];
+                        $type  = $field['type'] ?? 'text';
+                        $value = $input[ $key ] ?? '';
+
+                        if ( $type === 'email' ) {
+                            $clean[ $key ] = sanitize_email( $value );
+                        } else {
+                            $clean[ $key ] = sanitize_text_field( $value );
+                        }
+                    }
+
+                    return $clean;
+                },
+            ]
+        );
 
         add_settings_section(
             $tab['section_id'],
@@ -196,23 +221,30 @@ function my_custom_settings_init() {
             $tab['settings_group']
         );
 
-        $fields = include $tab['fields_file'];
-
         foreach ($fields as $field) {
             add_settings_field(
                 $field['field'],
                 $field['label'],
                 function ($args) use ($tab) {
                     $options = get_option($tab['option_name']);
+                    $options = is_array( $options ) ? $options : [];
                     $value = $options[$args['label_for']] ?? $args['default'];
-                    echo "<input type='text' id='{$args['label_for']}' name='{$tab['option_name']}[{$args['label_for']}]' value='" . esc_attr($value) . "' placeholder='" . esc_attr($args['placeholder']) . "' />";
+                    $type = $args['type'] ?? 'text';
+
+                    echo "<input type='" . esc_attr($type) . "' id='" . esc_attr( $args['label_for'] ) . "' name='" . esc_attr( $tab['option_name'] . '[' . $args['label_for'] . ']' ) . "' value='" . esc_attr($value) . "' placeholder='" . esc_attr($args['placeholder']) . "' class='regular-text' />";
+
+                    if ( ! empty( $args['description'] ) ) {
+                        echo '<p class="description">' . wp_kses_post( $args['description'] ) . '</p>';
+                    }
                 },
                 $tab['settings_group'],
                 $tab['section_id'],
                 [
                     'label_for' => $field['field'],
                     'placeholder' => $field['placeholder'],
-                    'default' => $field['default']
+                    'default' => $field['default'],
+                    'type' => $field['type'] ?? 'text',
+                    'description' => $field['description'] ?? ''
                 ]
             );
         }

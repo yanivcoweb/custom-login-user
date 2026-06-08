@@ -47,8 +47,16 @@ function handle_ajax_password_lost() {
 
     // Create the password reset URL
 	$options = get_option('clu_pages_url');
-	$url_page_password_set = trailingslashit($options['url_page_password_set']);
-    $reset_url = $url_page_password_set . '?action=rp&key=' . $reset_key . '&login=' . rawurlencode($user_data->user_login);
+	$options = is_array( $options ) ? $options : [];
+	$url_page_password_set = clu_normalize_site_url( $options['url_page_password_set'] ?? '', home_url( '/set-password/' ) );
+    $reset_url = add_query_arg(
+        [
+            'action' => 'rp',
+            'key'    => $reset_key,
+            'login'  => $user_data->user_login,
+        ],
+        trailingslashit( $url_page_password_set )
+    );
     // error_log('Password reset URL: ' . $reset_url);
 
     // Prepare the email
@@ -76,7 +84,7 @@ function handle_ajax_password_lost() {
         $user_data->user_email,
         $email_subject,
         $email_message,
-        ['Content-Type: text/html; charset=UTF-8']
+        clu_get_mail_headers()
     );
 
     // Check if the email was sent successfully

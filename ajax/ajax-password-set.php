@@ -82,14 +82,15 @@ function handle_ajax_password_set() {
     // Auto-login the user
     wp_set_auth_cookie($user->ID, true); // true for "remember me"
 
-    // Send a success response
+	// Send a success response
 	$options = get_option('clu_pages_url');
+	$options = is_array( $options ) ? $options : [];
 	wp_send_json([
         'success' => true,
         'data' => [
             //'message' => 'Your password has been successfully reset.',
             'message' => clu_render_message('password_reset_success'),
-			'redirect' => $options['url_page_redirect_after_password_set']
+			'redirect' => clu_normalize_site_url( $options['url_page_redirect_after_password_set'] ?? '', home_url( '/' ) )
         ]
     ]);
 		

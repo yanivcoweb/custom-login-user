@@ -163,3 +163,36 @@ function restrict_dashboard_access_for_custom_roles() {
         exit;
     }
 }
+
+// Add ID and registration date columns to the users list table
+add_filter('manage_users_columns', 'clu_add_user_columns');
+function clu_add_user_columns($columns) {
+    $new_columns = [];
+    foreach ($columns as $key => $label) {
+        $new_columns[$key] = $label;
+        if ($key === 'username') {
+            $new_columns['user_id']       = __('ID', 'your-textdomain');
+            $new_columns['user_reg_date'] = __('Date Registered', 'your-textdomain');
+        }
+    }
+    return $new_columns;
+}
+
+add_filter('manage_users_custom_column', 'clu_user_column_content', 10, 3);
+function clu_user_column_content($output, $column_name, $user_id) {
+    if ($column_name === 'user_id') {
+        return $user_id;
+    }
+    if ($column_name === 'user_reg_date') {
+        $user = get_userdata($user_id);
+        return $user ? esc_html(date_i18n(get_option('date_format'), strtotime($user->user_registered))) : '';
+    }
+    return $output;
+}
+
+add_filter('manage_users_sortable_columns', 'clu_sortable_user_columns');
+function clu_sortable_user_columns($columns) {
+    $columns['user_id']       = 'ID';
+    $columns['user_reg_date'] = 'registered';
+    return $columns;
+}

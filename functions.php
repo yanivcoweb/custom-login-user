@@ -34,6 +34,145 @@ function clu_message_link( $url, $label = 'Link' ) {
 }
 
 /**
+ * Returns the host used for legacy plugin sender fallback addresses.
+ *
+ * @return string
+ */
+function clu_get_mail_host() {
+    $host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+    if ( ! $host && ! empty( $_SERVER['HTTP_HOST'] ) ) {
+        $host = preg_replace( '/:\d+$/', '', sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) );
+    }
+
+    return (string) $host;
+}
+
+/**
+ * Checks whether a host is a local development host.
+ *
+ * @param string $host
+ * @return bool
+ */
+function clu_is_local_host( $host ) {
+    $host = strtolower( preg_replace( '/:\d+$/', '', (string) $host ) );
+    $ends_with = function ( $value, $suffix ) {
+        return $suffix === '' || substr( $value, -strlen( $suffix ) ) === $suffix;
+    };
+
+    return in_array( $host, [ 'localhost', '127.0.0.1', '::1' ], true )
+        || $ends_with( $host, '.local' )
+        || $ends_with( $host, '.test' )
+        || $ends_with( $host, '.localhost' );
+}
+
+/**
+ * Returns the URL scheme that plugin-generated links should use.
+ *
+ * @param string $target_url
+ * @return string
+ */
+function clu_get_site_url_scheme( $target_url = '' ) {
+    $home_scheme = strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_SCHEME ) );
+    $home_host   = (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+    $target_host = $target_url ? (string) wp_parse_url( $target_url, PHP_URL_HOST ) : '';
+
+    if ( $home_scheme === 'https' || is_ssl() || ( defined( 'FORCE_SSL_ADMIN' ) && FORCE_SSL_ADMIN ) ) {
+        return 'https';
+    }
+
+    if ( ! empty( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) {
+        $forwarded_proto = strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) );
+
+        if ( strpos( $forwarded_proto, 'https' ) !== false ) {
+            return 'https';
+        }
+    }
+
+    if ( $target_host && ! clu_is_local_host( $target_host ) ) {
+        return 'https';
+    }
+
+    if ( $home_host && ! clu_is_local_host( $home_host ) ) {
+        return 'https';
+    }
+
+    return $home_scheme ?: 'http';
+}
+
+/**
+ * Normalizes plugin-generated URLs to the current site scheme.
+ *
+ * @param string $url
+ * @param string $fallback_url
+ * @return string
+ */
+function clu_normalize_site_url( $url, $fallback_url = '' ) {
+    $url = trim( (string) $url );
+
+    if ( $url === '' ) {
+        $url = $fallback_url !== '' ? $fallback_url : home_url( '/' );
+    }
+
+    if ( strpos( $url, '//' ) === 0 ) {
+        $url = clu_get_site_url_scheme( $url ) . ':' . $url;
+    } elseif ( ! wp_parse_url( $url, PHP_URL_SCHEME ) ) {
+        $url = home_url( '/' . ltrim( $url, '/' ) );
+    }
+
+    return set_url_scheme( esc_url_raw( $url ), clu_get_site_url_scheme( $url ) );
+}
+
+/**
+ * Returns a sanitized mail option from the plugin Mail settings tab.
+ *
+ * @param string $key
+ * @return string
+ */
+function clu_get_mail_setting( $key ) {
+    $options = get_option( 'clu_mail' );
+
+    if ( ! is_array( $options ) || empty( $options[ $key ] ) ) {
+        return '';
+    }
+
+    return sanitize_text_field( $options[ $key ] );
+}
+
+/**
+ * Builds email headers for plugin-generated emails.
+ *
+ * SMTP plugins may still override the From address if they force a global sender.
+ *
+ * @param string $fallback_from_email
+ * @param string $fallback_from_name
+ * @return array
+ */
+function clu_get_mail_headers( $fallback_from_email = '', $fallback_from_name = '' ) {
+    $headers = [ 'Content-Type: text/html; charset=UTF-8' ];
+
+    $from_email = sanitize_email( clu_get_mail_setting( 'from_email' ) );
+
+    if ( ! is_email( $from_email ) && $fallback_from_email ) {
+        $from_email = sanitize_email( $fallback_from_email );
+    }
+
+    if ( ! is_email( $from_email ) ) {
+        return $headers;
+    }
+
+    $from_name = clu_get_mail_setting( 'from_name' );
+
+    if ( $from_name === '' ) {
+        $from_name = $fallback_from_name !== '' ? $fallback_from_name : get_bloginfo( 'name' );
+    }
+
+    $headers[] = sprintf( 'From: %s <%s>', sanitize_text_field( $from_name ), $from_email );
+
+    return $headers;
+}
+
+/**
  * Applies supported placeholders and formats a message for HTML output.
  *
  * @param string $template
@@ -216,11 +355,8 @@ function send_email_notify_client_on_new_user_with_custom_role($user_id )
 {
 	error_log(' functions.php - function send_email_notify_client_on_new_user_with_custom_role' );
 	$site_url = get_bloginfo('wpurl');
-	$host = $_SERVER['HTTP_HOST'];
-	$headers = [
-		'Content-Type: text/html; charset=UTF-8',
-		'From: ' . $site_url . ' <info@' . $host . '>',
-	];		
+	$mail_host = clu_get_mail_host();
+	$headers = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', $site_url );
 	$user = get_userdata( $user_id );
 	//$subject = sprintf( ' #001-%s Website: %s sign up for a free trial', time(), $user->display_name);
 	// $subject = sprintf( 'Website: %s register', $user->display_name);
@@ -230,7 +366,7 @@ function send_email_notify_client_on_new_user_with_custom_role($user_id )
 	// $message .= __('To approve register please follow the link bellow and switch user roll from "Awaiting Approval" to "Approved User": ');
 	// $message .= '<a href="'.$host.'/wp-admin/user-edit.php?user_id='.$user_id.'#role">Edit User</a><br><br>';	
 	$subject  = sprintf(clu_get_message('notify_client_subject'), $user->display_name);
-	$edit_url = $host . '/wp-admin/user-edit.php?user_id=' . $user_id . '#role';
+	$edit_url = clu_normalize_site_url( add_query_arg( 'user_id', $user_id, admin_url( 'user-edit.php' ) ) ) . '#role';
 	$message  = clu_format_message_template(
 		clu_get_message('notify_client_body'),
 		[
@@ -271,11 +407,8 @@ function send_email_notify_user_to_set_password($user_id )
 {
 	error_log(' functions.php - function send_email_notify_user_to_set_password' );
 	$site_url = get_bloginfo('wpurl');
-	$host = $_SERVER['HTTP_HOST'];
-	$headers = [
-		'Content-Type: text/html; charset=UTF-8',
-		'From: ' . $site_url . ' <info@' . $host . '>',
-	];		
+	$mail_host = clu_get_mail_host();
+	$headers = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', $site_url );
 	$user = get_userdata( $user_id );
 	//$subject = sprintf( ' #001-%s Website: %s sign up for a free trial', time(), $user->display_name);
 	$reset_key = get_password_reset_key($user);
@@ -286,8 +419,15 @@ function send_email_notify_user_to_set_password($user_id )
 	//$reset_url = network_site_url("set-password/?action=rp&key=$reset_key&login=" . rawurlencode($user_info->user_login), 'login');
 	
 	$options = get_option('clu_pages_url');
-	$url_page_password_set = trailingslashit($options['url_page_password_set']);
-	$reset_url = $url_page_password_set . '?key=' . $reset_key . '&login=' . rawurlencode($user->user_login);
+	$options = is_array( $options ) ? $options : [];
+	$url_page_password_set = clu_normalize_site_url( $options['url_page_password_set'] ?? '', home_url( '/set-password/' ) );
+	$reset_url = add_query_arg(
+		[
+			'key'   => $reset_key,
+			'login' => $user->user_login,
+		],
+		trailingslashit( $url_page_password_set )
+	);
 
 	
 	// $subject = sprintf( 'Website: %s register', $user->display_name);
