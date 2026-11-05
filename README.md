@@ -3,7 +3,7 @@
 A WordPress plugin that adds front-end pages for login, registration, password reset and account details, with an admin approval step for new users.
 
 **Author:** Yaniv Sasson
-**Version:** 1.2.0
+**Version:** 1.3.0
 
 ---
 
@@ -11,6 +11,7 @@ A WordPress plugin that adds front-end pages for login, registration, password r
 
 - Front-end pages for Login, Register, Lost Password, Set Password and My Account, all submitted over AJAX
 - User approval workflow (Pending → Approved or Rejected), with Approve and Reject links and bulk actions on the Users list. A pending or rejected user cannot log in or reset a password on any form of the site, wp-login.php and WooCommerce included
+- Restricted content: whole pages or parts of a page for approved users only
 - Flexible register form: turn fields on and off, make them required or optional, change their order, add your own, and choose which ones users can change on My Account
 - Admin notification email on new registrations with what the user filled in, an email with a set-password link upon approval, and a rejection email
 - Every label and message can be edited in the settings, so the forms work in any language, including right-to-left
@@ -32,6 +33,7 @@ The plugin adds pages next to the default ones. `wp-login.php` keeps working, an
 | `[clu_password_set_form]` | `[custom-password-set]` | Set or reset password form, opened from the emailed link |
 | `[clu_my_account]` | `[my-account]` | Profile and change-password forms |
 | `[clu_auth_buttons]` | `[custom-auth-buttons]` | Login and register links, or the user's name and a logout link |
+| `[clu_approved_only]...[/clu_approved_only]` | | Shows what it encloses to approved users only |
 
 The forms accept `show_title="true"` to show their title from the settings.
 
@@ -50,6 +52,39 @@ The login form honours `?redirect_to=` for addresses on the same site.
 Rejecting moves the user to the **Rejected User** role and emails them. They cannot log in or reset a password, and they cannot register again with the same address. The account stays, so a mistake can be undone with **Approve**, which sends the set-password email. To remove someone without an email, such as a bot, use the normal **Delete** link.
 
 Registration follows the WordPress setting **Settings > General > Anyone can register**. When it is off, the form and its AJAX endpoint are both closed.
+
+---
+
+## Restricted Content
+
+Approved users, site administrators and whoever can edit the page can see restricted content.
+
+**A whole page or post:** tick **Approved users only** in the **Access** box on its edit screen. The lists in wp-admin mark it next to the title.
+
+- A visitor is sent to the login page, and comes back to the page after logging in
+- A logged-in user who is not approved sees a plain message, or goes to the page set under **Page for users without access** on the Pages URL tab
+- Search, including REST search, does not find it. Archives, feeds and the REST API show the message in place of its text and excerpt
+- Pages that people need on the way in, with a login, registration or password form or set on the Pages URL tab, stay open even if ticked
+- These pages are kept out of page caches
+
+**Part of a page:**
+
+```
+[clu_approved_only]Price list[/clu_approved_only]
+[clu_approved_only message="Members see the prices here."]...[/clu_approved_only]
+[clu_approved_only message=""]Others see nothing here, not even a message.[/clu_approved_only]
+```
+
+The default texts are on the Messages tab.
+
+What this does not cover:
+
+- **Uploaded files.** A PDF linked from a restricted page can still be opened by anyone who has its direct address
+- **Turning the plugin off.** Deactivating or deleting it opens every restricted page
+- **Child pages.** Each page is restricted on its own
+- **Titles and addresses.** A restricted post keeps its title in archives, feeds and menus, and its address in sitemaps
+- **Anything an archive template prints by itself,** such as custom fields, and comments in the site-wide comments feed
+- **WooCommerce products,** which do not offer the box, since they could still be bought. The `clu_restrictable_post_types` filter can add them
 
 ---
 
@@ -102,6 +137,8 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 | `clu_privileged_capabilities` | The capabilities that disqualify a role from being pending or approved |
 | `clu_send_rejection_email` | Return false to reject users without emailing them. Receives the user |
 | `clu_region_countries` | The regions and countries of the Region and Country fields |
+| `clu_user_can_view_restricted` | Decide who sees restricted content, for example to let in a role that was on the site before the approval flow. Receives the answer, the user and the post ID, which is 0 for restricted content in general |
+| `clu_restrictable_post_types` | The post types that offer the Access box |
 
 The action `clu_decision_mail_failed` fires when an approval or rejection email could not be sent.
 
@@ -129,6 +166,15 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.3.0
+
+Added
+
+- Restricted content: an Access box for a whole page or post, and the `[clu_approved_only]` shortcode for part of one. See what it does and does not cover under Restricted Content above.
+- A setting for the page that logged-in users without access are sent to, and two new messages.
+
+Nothing changes on an existing site until a page is restricted.
 
 ### 1.2.0
 

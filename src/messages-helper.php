@@ -87,6 +87,11 @@ function clu_default_messages() {
         'login_button_text'          => 'Login',
         'register_button_text'       => 'Register',
 
+        // ── Restricted content ───────────────────────────────────────────
+        // {login_url} = login page that leads back here, {register_url} = register page
+        'content_login_required'     => 'This content is for approved users. Please <a href="{login_url}">log in</a> to see it.',
+        'content_no_access'          => 'This content is for approved users only.',
+
         // ── Shortcode: My Account ────────────────────────────────────────
         'my_account_not_logged_in'      => 'You must be logged in to view this page.',
         'profile_update_success'        => 'Your profile has been updated successfully.',

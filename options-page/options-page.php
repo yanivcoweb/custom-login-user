@@ -142,6 +142,7 @@ function clu_render_settings_page() {
         <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
         <div class="clu-shortcode-info notice notice-info inline">
             <p><strong>Auth Buttons Shortcode:</strong> <code>[clu_auth_buttons]</code></p>
+            <p><strong>Approved Users Only:</strong> <code>[clu_approved_only]...[/clu_approved_only]</code> around part of a page, or the <strong>Access</strong> box on the edit screen for a whole page.</p>
             <p>The older shortcode names, such as <code>[custom-login-form]</code>, keep working on existing pages.</p>
         </div>
         <nav class="nav-tab-wrapper">
@@ -495,6 +496,8 @@ function clu_render_messages_tab() {
             'logout_button_text'      => 'Auth buttons: logout text',
             'login_button_text'       => 'Auth buttons: login text',
             'register_button_text'    => 'Auth buttons: register text',
+            'content_login_required'  => 'Restricted content: for a visitor (<code>{login_url}</code> = login page, <code>{register_url}</code> = register page)',
+            'content_no_access'       => 'Restricted content: for a logged-in user who is not approved',
         ],
         'Email Templates' => [
             'email_link_text'       => 'Text of the link in password emails',

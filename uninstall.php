@@ -30,6 +30,7 @@ foreach ( $clu_options as $clu_option ) {
 
 delete_transient( 'clu_pending_count' );
 delete_metadata( 'user', 0, 'clu_approval_link', '', true );
+delete_post_meta_by_key( '_clu_restricted' );
 
 foreach ( [ 'pending_user', 'approved_user', 'rejected_user' ] as $clu_role ) {
     if ( get_role( $clu_role ) && ! get_users( [ 'role' => $clu_role, 'number' => 1, 'fields' => 'ID' ] ) ) {

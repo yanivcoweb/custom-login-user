@@ -1153,7 +1153,228 @@ clu_maybe_upgrade();
 t( 'a site from 1.0 counts as an update', in_array( 'company', array_column( clu_get_register_form_fields(), 'key' ), true ) );
 
 reset_state();
-section( '21. Nonces, templates, settings, update and uninstall' );
+section( '21. Restricted content' );
+
+function make_page( $title, $content, $restricted = true, $extra = [] ) {
+    $id = wp_insert_post( array_merge( [ 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => $title, 'post_content' => $content ], $extra ) );
+    if ( $restricted ) {
+        update_post_meta( $id, '_clu_restricted', '1' );
+    }
+    return $id;
+}
+
+/** Opens a post the way a request does. Returns open, denied, or the address it was sent to. */
+function visit( $post_id, $user_id = 0 ) {
+    global $wp_query, $wp_the_query, $post;
+    wp_set_current_user( $user_id );
+    $wp_the_query = $wp_query = new WP_Query( [ 'p' => $post_id, 'post_type' => 'any' ] );
+    $post         = get_post( $post_id );
+    $result       = 'open';
+    $catch        = function ( $location ) use ( &$result ) {
+        $result = $location;
+        throw new CLU_Die();
+    };
+    $GLOBALS['clu_die'] = null;
+    $die = function () {
+        return function ( $message, $title = '', $args = [] ) {
+            $GLOBALS['clu_die'] = [ 'message' => $message, 'args' => $args ];
+            throw new CLU_Die();
+        };
+    };
+    add_filter( 'wp_redirect', $catch );
+    add_filter( 'wp_die_ajax_handler', $die, 20 );
+    try {
+        clu_guard_restricted_page();
+    } catch ( CLU_Die $e ) {
+        if ( $result === 'open' ) {
+            $result = 'denied';
+        }
+    }
+    remove_filter( 'wp_redirect', $catch );
+    remove_filter( 'wp_die_ajax_handler', $die, 20 );
+    return $result;
+}
+
+/** Shows a post's text the way an archive does, for the given user. */
+function shown_to( $post_id, $user_id, $callback ) {
+    global $post;
+    wp_set_current_user( $user_id );
+    $post = get_post( $post_id );
+    setup_postdata( $post );
+    $out = $callback( $post );
+    wp_reset_postdata();
+    return $out;
+}
+
+$secret  = 'clusecretword' . wp_generate_password( 6, false );
+$open_id = make_page( 'Open page', "Open text $secret", false );
+$page_id = make_page( 'Restricted page', "Hidden text $secret", true, [ 'post_excerpt' => "Handwritten excerpt $secret" ] );
+$appr    = make_user( 'clu_c_appr', 'clu-c-a@example.test', 'Start1!pass', approved_role() );
+$subs    = make_user( 'clu_c_sub', 'clu-c-s@example.test', 'Start1!pass', 'subscriber' );
+$edit    = make_user( 'clu_c_ed', 'clu-c-e@example.test', 'Start1!pass', 'editor' );
+$pend    = make_user( 'clu_c_pend', 'clu-c-p@example.test', 'Start1!pass', pending_role() );
+$rej     = make_user( 'clu_c_rej', 'clu-c-r@example.test', 'Start1!pass', clu_get_role_slug( 'rejected_role' ) );
+
+t( 'an open page stays open to visitors', visit( $open_id ) === 'open' );
+t( 'an open page is left to the page cache', ! defined( 'DONOTCACHEPAGE' ) );
+
+$target = visit( $page_id );
+t( 'a visitor is sent to log in', $target !== 'open' && $target !== 'denied' && strpos( $target, 'wp-login.php' ) !== false, $target );
+t( '...and comes back to the page afterwards', ( query_of( $target )['redirect_to'] ?? '' ) === get_permalink( $page_id ), $target );
+t( 'a restricted page stays out of page caches', defined( 'DONOTCACHEPAGE' ) );
+update_option( 'clu_pages_url', [ 'url_page_login' => home_url( '/my-login/' ) ] );
+$target = visit( $page_id );
+t( 'the login page from the settings is used', strpos( $target, '/my-login/' ) !== false && ( query_of( $target )['redirect_to'] ?? '' ) === get_permalink( $page_id ), $target );
+delete_option( 'clu_pages_url' );
+
+t( 'an approved user gets in', visit( $page_id, $appr ) === 'open' );
+t( 'an administrator gets in', visit( $page_id, 1 ) === 'open' );
+t( 'an editor of the page gets in', visit( $page_id, $edit ) === 'open' );
+t( 'a subscriber does not', visit( $page_id, $subs ) === 'denied' );
+t( '...and sees the message, not the content', strpos( (string) ( $GLOBALS['clu_die']['message'] ?? '' ), 'approved users only' ) !== false && strpos( (string) ( $GLOBALS['clu_die']['message'] ?? '' ), $secret ) === false );
+t( '...with the right status', ( $GLOBALS['clu_die']['args']['response'] ?? 0 ) === 403 );
+t( 'a pending user with a session does not', visit( $page_id, $pend ) === 'denied' );
+t( 'a rejected user with a session does not', visit( $page_id, $rej ) === 'denied' );
+update_option( 'clu_pages_url', [ 'url_page_no_access' => home_url( '/sorry/' ) ] );
+t( 'a page for users without access can be set', strpos( visit( $page_id, $subs ), '/sorry/' ) !== false );
+delete_option( 'clu_pages_url' );
+$let_in = function ( $allowed, $user ) use ( $subs ) { return $user->ID === $subs ? true : $allowed; };
+add_filter( 'clu_user_can_view_restricted', $let_in, 10, 2 );
+t( 'the filter can let in another role', visit( $page_id, $subs ) === 'open' );
+remove_filter( 'clu_user_can_view_restricted', $let_in, 10 );
+wp_set_current_user( 0 );
+
+$content = function ( $p ) { return apply_filters( 'the_content', $p->post_content ); };
+$excerpt = function ( $p ) { return get_the_excerpt( $p ); };
+$feed    = function ( $p ) { return get_the_content_feed(); };
+t( 'an archive hides the content from a visitor', strpos( shown_to( $page_id, 0, $content ), $secret ) === false );
+t( '...and offers to log in, leading back here', strpos( shown_to( $page_id, 0, $content ), 'wp-login.php' ) !== false && strpos( shown_to( $page_id, 0, $content ), rawurlencode( get_permalink( $page_id ) ) ) !== false, shown_to( $page_id, 0, $content ) );
+t( 'it hides a handwritten excerpt', strpos( shown_to( $page_id, 0, $excerpt ), $secret ) === false, shown_to( $page_id, 0, $excerpt ) );
+t( '...as plain text', strpos( shown_to( $page_id, 0, $excerpt ), '<' ) === false, shown_to( $page_id, 0, $excerpt ) );
+t( 'a feed hides the content', strpos( shown_to( $page_id, 0, $feed ), $secret ) === false );
+t( 'a subscriber gets the same', strpos( shown_to( $page_id, $subs, $content ), $secret ) === false && strpos( shown_to( $page_id, $subs, $excerpt ), $secret ) === false );
+t( 'an approved user sees the content', strpos( shown_to( $page_id, $appr, $content ), $secret ) !== false && strpos( shown_to( $page_id, $appr, $excerpt ), $secret ) !== false );
+t( 'an open page keeps its content', strpos( shown_to( $open_id, 0, $content ), $secret ) !== false );
+
+$found = function ( $user_id, $args = [] ) use ( $secret ) {
+    wp_set_current_user( $user_id );
+    $query = new WP_Query( array_merge( [ 's' => $secret, 'post_type' => 'page', 'fields' => 'ids' ], $args ) );
+    wp_set_current_user( 0 );
+    return $query->posts;
+};
+t( 'search does not show a restricted page to a visitor', ! in_array( $page_id, $found( 0 ), true ) && in_array( $open_id, $found( 0 ), true ) );
+t( 'nor to a subscriber', ! in_array( $page_id, $found( $subs ), true ) );
+t( 'an approved user finds it', in_array( $page_id, $found( $appr ), true ) );
+update_post_meta( $open_id, 'clu_other', '1' );
+$narrowed = $found( 0, [ 'meta_query' => [ 'relation' => 'OR', [ 'key' => 'clu_other', 'value' => '1' ], [ 'key' => 'clu_nothing', 'value' => '1' ] ] ] );
+t( 'a query with its own meta conditions keeps them', $narrowed === [ $open_id ], implode( ',', $narrowed ) );
+
+$rest = function ( $route, $params = [], $user_id = 0 ) {
+    wp_set_current_user( $user_id );
+    $request = new WP_REST_Request( 'GET', $route );
+    $request->set_query_params( $params );
+    $data = rest_do_request( $request )->get_data();
+    wp_set_current_user( 0 );
+    return $data;
+};
+$data = $rest( '/wp/v2/pages/' . $page_id );
+t( 'the REST API hides the content', isset( $data['content']['rendered'] ) && strpos( wp_json_encode( $data ), $secret ) === false, substr( wp_json_encode( $data ), 0, 300 ) );
+$data = $rest( '/wp/v2/pages', [ 'search' => $secret ] );
+t( 'REST search does not find it', ! in_array( $page_id, array_column( (array) $data, 'id' ), true ) );
+$data = $rest( '/wp/v2/pages/' . $page_id, [], $appr );
+t( 'an approved user gets it through REST', strpos( wp_json_encode( $data ), $secret ) !== false );
+
+$login_page = make_page( 'Sign in', '[clu_login_form]', true );
+t( 'a page with a login form stays open, whatever is ticked', visit( $login_page ) === 'open' && ! clu_post_is_restricted( $login_page ) );
+$old_login = make_page( 'Old sign in', '[custom-login-form]', true );
+t( '...also with the older shortcode name', visit( $old_login ) === 'open' );
+$set_page = make_page( 'Set', '[clu_password_set_form]', true );
+t( '...and the set-password page, or new users are locked out', visit( $set_page ) === 'open' );
+$builder_page = make_page( 'Built with a builder', 'No shortcode here', true );
+update_option( 'clu_pages_url', [ 'url_page_login' => get_permalink( $builder_page ) ] );
+t( '...and the page set as the login page, or visitors go in circles', visit( $builder_page ) === 'open', (string) url_to_postid( get_permalink( $builder_page ) ) );
+delete_option( 'clu_pages_url' );
+t( '...which holds only while it is the login page', visit( $builder_page ) !== 'open' );
+$blog_page = make_page( 'News', 'x', true );
+update_option( 'show_on_front', 'page' );
+update_option( 'page_for_posts', $blog_page );
+$blog_redirect = 'open';
+$blog_catch    = function ( $location ) use ( &$blog_redirect ) {
+    $blog_redirect = $location;
+    throw new CLU_Die();
+};
+$wp_the_query = $wp_query = new WP_Query( [ 'page_id' => $blog_page ] );
+add_filter( 'wp_redirect', $blog_catch );
+try {
+    clu_guard_restricted_page();
+} catch ( CLU_Die $e ) {
+    // Redirected.
+}
+remove_filter( 'wp_redirect', $blog_catch );
+t( 'the page that lists the blog can be restricted too', $wp_query->is_home() && strpos( $blog_redirect, 'wp-login.php' ) !== false, $blog_redirect );
+update_option( 'show_on_front', 'posts' );
+delete_option( 'page_for_posts' );
+$my_account = make_page( 'Account', '[clu_my_account]', true );
+t( 'My Account is not one of those', visit( $my_account ) !== 'open' );
+wp_set_current_user( 0 );
+
+$short = function ( $code, $user_id ) use ( $open_id ) {
+    return shown_to( $open_id, $user_id, function () use ( $code ) { return do_shortcode( $code ); } );
+};
+$code = '[clu_approved_only]Inside ' . $secret . ' [clu_auth_buttons][/clu_approved_only]';
+t( 'the shortcode shows approved users the content', strpos( $short( $code, $appr ), $secret ) !== false );
+t( '...and runs shortcodes inside it', strpos( $short( $code, $appr ), '[clu_auth_buttons]' ) === false );
+t( 'it hides the content from a visitor, and offers to log in', strpos( $short( $code, 0 ), $secret ) === false && strpos( $short( $code, 0 ), 'redirect_to=' ) !== false, $short( $code, 0 ) );
+t( 'it hides the content from a subscriber', strpos( $short( $code, $subs ), $secret ) === false && strpos( $short( $code, $subs ), 'approved users only' ) !== false );
+t( 'it takes a message of its own', strpos( $short( '[clu_approved_only message="Members <b>only</b><script>x</script>"]x[/clu_approved_only]', 0 ), 'Members <b>only</b>' ) !== false && strpos( $short( '[clu_approved_only message="Members <script>x</script>"]x[/clu_approved_only]', 0 ), '<script' ) === false );
+t( 'an empty message hides it silently', $short( '[clu_approved_only message=""]' . $secret . '[/clu_approved_only]', 0 ) === '' );
+t( 'it works with nothing inside', $short( '[clu_approved_only]', $appr ) === '' );
+$with_short = make_page( 'Partly hidden', '[clu_approved_only]x[/clu_approved_only]', false );
+t( 'a page with the shortcode stays open', visit( $with_short ) === 'open' );
+wp_set_current_user( 0 );
+
+$save = function ( $post, $id, $user_id ) {
+    wp_set_current_user( $user_id );
+    $_POST = wp_slash( $post );
+    do_action( 'save_post', $id, get_post( $id ), true );
+    $_POST = [];
+    wp_set_current_user( 0 );
+};
+$box = make_page( 'Box', 'x', false );
+wp_set_current_user( 1 );
+$nonce = wp_create_nonce( 'clu_save_access' );
+wp_set_current_user( $subs );
+$subs_nonce = wp_create_nonce( 'clu_save_access' );
+wp_set_current_user( 0 );
+$save( [ 'clu_restricted' => '1' ], $box, 1 );
+t( 'the box saves nothing without its nonce', get_post_meta( $box, '_clu_restricted', true ) === '' );
+$save( [ 'clu_access_nonce' => $subs_nonce, 'clu_restricted' => '1' ], $box, $subs );
+t( 'someone who cannot edit the page cannot restrict it', get_post_meta( $box, '_clu_restricted', true ) === '' );
+$save( [ 'clu_access_nonce' => $nonce, 'clu_restricted' => '1' ], $box, 1 );
+t( 'the box restricts the page', get_post_meta( $box, '_clu_restricted', true ) === '1' );
+$save( [ 'clu_something' => 'quick edit' ], $box, 1 );
+t( 'a save from elsewhere leaves it restricted', get_post_meta( $box, '_clu_restricted', true ) === '1' );
+$save( [ 'clu_access_nonce' => $nonce ], $box, 1 );
+t( 'unticking opens it again', get_post_meta( $box, '_clu_restricted', true ) === '' );
+wp_set_current_user( 1 );
+ob_start();
+clu_render_access_meta_box( get_post( $page_id ) );
+$html = ob_get_clean();
+t( 'the box shows the saved state', (bool) preg_match( '/name="clu_restricted"[^>]*checked/', $html ) );
+ob_start();
+clu_render_access_meta_box( get_post( $login_page ) );
+$html = ob_get_clean();
+t( 'the box says when a page must stay open', strpos( $html, 'name="clu_restricted"' ) === false && strpos( $html, 'stays open' ) !== false );
+wp_set_current_user( 0 );
+$states = apply_filters( 'display_post_states', [], get_post( $page_id ) );
+t( 'the list of pages marks it', isset( $states['clu_restricted'] ) );
+$states = apply_filters( 'display_post_states', [], get_post( $login_page ) );
+t( 'but not a page that is open anyway', ! isset( $states['clu_restricted'] ) );
+$types = clu_restrictable_post_types();
+t( 'pages and posts offer the box, media and products do not', in_array( 'page', $types, true ) && in_array( 'post', $types, true ) && ! in_array( 'attachment', $types, true ) && ! in_array( 'product', $types, true ), implode( ',', $types ) );
+
+reset_state();
+section( '22. Nonces, templates, settings, update and uninstall' );
 {
     $res = ajax( 'clu_refresh_nonce', [ 'field' => 'login_nonce' ] );
     wp_set_current_user( 0 );
@@ -1258,6 +1479,7 @@ section( '21. Nonces, templates, settings, update and uninstall' );
     t( 'Setup Pages saves the URLs', strpos( clu_get_page_url( 'url_page_login' ), '/login' ) !== false, clu_get_page_url( 'url_page_login' ) );
     wp_set_current_user( 0 );
 
+    $marker_page = make_page( 'Uninstall marker', 'x', true );
     $marker_id = make_user( 'clu_uninst', 'clu-uninst@example.test', 'Start1!pass', 'subscriber' );
     update_user_meta( $marker_id, 'clu_approval_link', 1 );
     update_option( 'clu_mail', [ 'from_name' => 'x' ] );
@@ -1274,9 +1496,10 @@ section( '21. Nonces, templates, settings, update and uninstall' );
     t( 'uninstall removes the unused roles', ! get_role( 'pending_user' ) && ! get_role( 'approved_user' ) && ! get_role( 'rejected_user' ) );
     t( 'uninstall removes the field list', get_option( 'clu_register_fields', 'gone' ) === 'gone' );
     t( 'uninstall removes the flag on users', ! get_user_meta( $marker_id, 'clu_approval_link', true ) );
+    t( 'uninstall removes the flag on pages', get_post_meta( $marker_page, '_clu_restricted', true ) === '' );
 }
 
-section( '22. PHP warnings raised from inside the plugin during all of the above' );
+section( '23. PHP warnings raised from inside the plugin during all of the above' );
 $warnings = array_values( array_unique( $GLOBALS['clu_php_warnings'] ) );
 t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", array_slice( $warnings, 0, 12 ) ) );
 

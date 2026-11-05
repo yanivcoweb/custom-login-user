@@ -45,4 +45,11 @@ return [
         'placeholder' => '',
         'default'     => '',
     ],
+    [
+        'field'       => 'url_page_no_access',
+        'label'       => 'Page for users without access',
+        'placeholder' => '',
+        'default'     => '',
+        'description' => 'Where a logged-in user who is not approved goes when opening a restricted page. With this empty, they see a plain message.',
+    ],
 ];
