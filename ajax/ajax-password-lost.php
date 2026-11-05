@@ -32,8 +32,10 @@ function clu_handle_ajax_password_lost() {
         wp_send_json_success( $sent_response );
     }
 
-    if ( clu_user_is_pending( $user ) ) {
-        wp_send_json_error( [ 'message' => clu_render_message( 'account_pending' ) ] );
+    $blocked = clu_blocked_account_message( $user );
+
+    if ( $blocked !== '' ) {
+        wp_send_json_error( [ 'message' => clu_render_message( $blocked ) ] );
     }
 
     if ( clu_rate_limited( 'lost_password_account', 3, 15 * MINUTE_IN_SECONDS, (string) $user->ID ) ) {

@@ -3,7 +3,7 @@
  * Plugin Name:       Custom Login Users
  * Plugin URI:        https://github.com/yanivcoweb/custom-login-user
  * Description:       Front-end login, registration, password and account pages, with an admin approval step for new users.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 5.0
  * Requires PHP:      7.4
  * Author:            Yaniv Sasson
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'CLU_VERSION', '1.1.0' );
+define( 'CLU_VERSION', '1.2.0' );
 define( 'CLU_PLUGIN_FILE', __FILE__ );
 define( 'CLU_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CLU_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -24,6 +24,8 @@ $clu_includes = [
     'src/messages-helper.php',
     'src/roles-helper.php',
     'src/access.php',
+    'src/approvals.php',
+    'src/register-fields.php',
     'src/user-extra-fields.php',
     'options-page/options-page.php',
     'shortcodes/shortcode-login-form.php',
@@ -37,6 +39,7 @@ $clu_includes = [
     'ajax/ajax-password-set.php',
     'ajax/ajax-login.php',
     'ajax/ajax-register.php',
+    'ajax/ajax-register-fields.php',
     'ajax/ajax-create-pages.php',
     'ajax/ajax-roles.php',
     'ajax/ajax-messages.php',
@@ -52,6 +55,8 @@ unset( $clu_includes, $clu_include );
 
 register_activation_hook( __FILE__, 'clu_activate' );
 function clu_activate() {
+    // First, because it tells an old site from a new one by the roles being there.
+    clu_maybe_upgrade();
     clu_add_roles();
     update_option( 'clu_db_version', CLU_VERSION );
 }
@@ -67,10 +72,18 @@ function clu_maybe_upgrade() {
         return;
     }
 
+    // Version 1.0 had no version option, but it added its roles on every request.
+    $is_update = $installed || get_role( 'pending_user' );
+
     if ( ! $installed ) {
-        // Version 1.0 had no version option and added its roles on every request.
         clu_add_roles();
         clu_migrate_saved_messages();
+    }
+
+    if ( $is_update && version_compare( $installed ?: '1.0', '1.2.0', '<' ) ) {
+        clu_add_rejected_role();
+        clu_keep_legacy_register_fields();
+        clu_migrate_saved_admin_email();
     }
 
     update_option( 'clu_db_version', CLU_VERSION );
@@ -81,6 +94,11 @@ function clu_register_assets() {
     wp_register_script( 'clu-validation', CLU_PLUGIN_URL . 'js/validation.js', [], CLU_VERSION, true );
     wp_register_script( 'clu-register', CLU_PLUGIN_URL . 'js/register.js', [], CLU_VERSION, true );
     wp_register_style( 'clu-forms', CLU_PLUGIN_URL . 'css/templates-style.css', [], CLU_VERSION );
+
+    // Here and not when a form renders, because a theme or page builder may render the
+    // content before this hook, and data added to a script not yet registered is lost.
+    // It reaches the page only if a form with both fields asks for the script.
+    wp_localize_script( 'clu-register', 'cluRegions', clu_get_region_countries() );
 
     wp_localize_script( 'clu-validation', 'cluData', [
         'ajaxurl'       => admin_url( 'admin-ajax.php' ),

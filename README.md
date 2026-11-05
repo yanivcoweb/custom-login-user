@@ -3,18 +3,19 @@
 A WordPress plugin that adds front-end pages for login, registration, password reset and account details, with an admin approval step for new users.
 
 **Author:** Yaniv Sasson
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 ---
 
 ## Features
 
 - Front-end pages for Login, Register, Lost Password, Set Password and My Account, all submitted over AJAX
-- User approval workflow (Pending → Approved). A pending user cannot log in or reset a password on any form of the site, wp-login.php and WooCommerce included
-- Admin notification email on new registrations, and an email with a set-password link upon approval
+- User approval workflow (Pending → Approved or Rejected), with Approve and Reject links and bulk actions on the Users list. A pending or rejected user cannot log in or reset a password on any form of the site, wp-login.php and WooCommerce included
+- Flexible register form: turn fields on and off, make them required or optional, change their order, add your own, and choose which ones users can change on My Account
+- Admin notification email on new registrations with what the user filled in, an email with a set-password link upon approval, and a rejection email
 - Every label and message can be edited in the settings, so the forms work in any language, including right-to-left
 - Configurable password rules (min length, uppercase, lowercase, numbers, symbols)
-- Custom user roles: `Pending User` and `Approved User`, both kept out of the WordPress dashboard
+- Custom user roles: `Pending User`, `Approved User` and `Rejected User`, all kept out of the WordPress dashboard
 - Protection against spam and abuse: a hidden bot trap and a limit on the registration form, a limit on reset emails, and the same answer for known and unknown accounts on the login and lost-password forms
 
 The plugin adds pages next to the default ones. `wp-login.php` keeps working, and core links to it are not redirected.
@@ -41,12 +42,29 @@ The login form honours `?redirect_to=` for addresses on the same site.
 ## User Approval Workflow
 
 1. A user registers via the front-end form and is assigned the **Pending User** role.
-2. The site admin receives an email with a link to edit the user. With no address set on the Mail tab, it goes to the site admin email.
-3. The admin changes the user's role to **Approved User**.
-4. The user automatically receives an email with a link to set their password. That link is valid for 7 days. Other reset links stay at the WordPress default of 1 day.
+2. The site admin receives an email with what the user filled in and a link to the users awaiting approval. With no address set on the Mail tab, it goes to the site admin email. The Users menu shows how many are waiting.
+3. On **Users > Awaiting Approval**, which also lists the registration details, the admin clicks **Approve** or **Reject**, or selects several users and uses the bulk actions. Changing the role on the user's own screen does the same.
+4. An approved user automatically receives an email with a link to set their password. That link is valid for 7 days. Other reset links stay at the WordPress default of 1 day.
 5. After setting a password, the user is logged in.
 
+Rejecting moves the user to the **Rejected User** role and emails them. They cannot log in or reset a password, and they cannot register again with the same address. The account stays, so a mistake can be undone with **Approve**, which sends the set-password email. To remove someone without an email, such as a bot, use the normal **Delete** link.
+
 Registration follows the WordPress setting **Settings > General > Anyone can register**. When it is off, the form and its AJAX endpoint are both closed.
+
+---
+
+## Register Fields
+
+On **Settings > Custom Login Users > Register Fields**, each field has:
+
+- **On the form**: whether the register form asks for it. The email is always on
+- **Label** and **Placeholder**
+- **Required**: on the register form, and on My Account too
+- **In My Account**: whether users can change it later. A field left out cannot be changed there, even with a forged request
+
+A new site starts with first name, last name and email. Company, Customer Type, Region and Country are built in, ready to be turned on. A site updated from an older version keeps its form as it was.
+
+Custom fields can be text, long text, phone, number, web address, dropdown or checkbox, and are checked on the server by their type. A checkbox label can hold a link, for terms of use. Values are saved as user meta under `clu_field_<name>`, a key that stays the same when the label changes. Removing a field keeps what users already filled in, in the database.
 
 ---
 
@@ -64,6 +82,7 @@ Registration follows the WordPress setting **Settings > General > Anyone can reg
 
 - **Pages URL** — The login, register, password and redirect addresses
 - **Mail** — Sender details and who hears about new registrations
+- **Register Fields** — What the register form asks for
 - **Register, Login, Password Reset, Password Lost and My Account Form** — Labels, buttons and validation texts
 - **Password Rules** — Requirements for new passwords
 - **Messages** — Texts shown to users, and the email templates
@@ -81,6 +100,10 @@ Registration follows the WordPress setting **Settings > General > Anyone can reg
 | `clu_approval_link_lifetime` | Seconds an approval link stays valid |
 | `clu_user_is_pending` | Decide whether a user counts as waiting for approval |
 | `clu_privileged_capabilities` | The capabilities that disqualify a role from being pending or approved |
+| `clu_send_rejection_email` | Return false to reject users without emailing them. Receives the user |
+| `clu_region_countries` | The regions and countries of the Region and Country fields |
+
+The action `clu_decision_mail_failed` fires when an approval or rejection email could not be sent.
 
 ---
 
@@ -106,6 +129,27 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.2.0
+
+Before updating a live site
+
+- The register form stays as it is: on the update, all its fields stay on and required, with their saved labels and placeholders. Those labels move from the Register Form tab to the new Register Fields tab.
+- A field that is required on the register form is now required on My Account too. Until now, Company was optional there. To keep it so, make it optional on the Register Fields tab.
+- The functions `clu_register_placeholder()` and `clu_get_customer_type_options()` are gone, in case a theme calls them. Choices and placeholders from ACF options keep working.
+- The default of the email to the admin changed. A site that wrote its own text keeps it, and `{edit_user_link}` keeps working in it.
+
+Added
+
+- Approve and Reject links and bulk actions on the Users list, a rejection email, and a Rejected User role that cannot log in.
+- A count of users awaiting approval on the Users menu, a link to their list, and a column there with what they filled in. The email to the admin lists it too.
+- The Register Fields tab: fields on and off, required or optional, in any order, your own custom fields, and which of them appear on My Account.
+- The screen reports when an approval or rejection email could not be sent.
+
+Fixes
+
+- A user moved to a role that may not log in stayed logged in until the session ended. Their sessions now end at once.
+- Without ACF, the placeholders of a new form were fixed English text. They now come from the settings.
 
 ### 1.1.0
 

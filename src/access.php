@@ -28,27 +28,57 @@ function clu_user_is_pending( $user ) {
 }
 
 /**
- * Stops a pending user from logging in, through any login form on the site.
+ * Tells whether a user's registration was rejected.
+ *
+ * @param mixed $user WP_User, or anything else, which never counts as rejected.
+ * @return bool
+ */
+function clu_user_is_rejected( $user ) {
+    if ( ! $user instanceof WP_User || ! $user->exists() ) {
+        return false;
+    }
+
+    $roles = (array) $user->roles;
+
+    return in_array( clu_get_role_slug( 'rejected_role' ), $roles, true )
+        && ! in_array( clu_get_role_slug( 'approved_role' ), $roles, true )
+        && ! user_can( $user, 'manage_options' );
+}
+
+/**
+ * Returns the message for an account that may not log in or reset its password.
+ *
+ * @param mixed $user
+ * @return string Message key, or '' when the account is free to.
+ */
+function clu_blocked_account_message( $user ) {
+    if ( clu_user_is_rejected( $user ) ) {
+        return 'account_rejected';
+    }
+
+    return clu_user_is_pending( $user ) ? 'account_pending' : '';
+}
+
+/**
+ * Stops a pending or rejected user from logging in, through any login form on the site.
  *
  * Runs late, so the account's status is only revealed to someone who already
  * passed the password check.
  */
 add_filter( 'authenticate', 'clu_block_pending_login', 99 );
 function clu_block_pending_login( $user ) {
-    if ( clu_user_is_pending( $user ) ) {
-        return new WP_Error( 'clu_account_pending', clu_render_message( 'account_pending' ) );
-    }
+    $message = clu_blocked_account_message( $user );
 
-    return $user;
+    return $message !== '' ? new WP_Error( 'clu_' . $message, clu_render_message( $message ) ) : $user;
 }
 
 /**
- * Stops a pending user from getting a reset key, which would also be a way to log
- * in without approval.
+ * Stops a pending or rejected user from getting a reset key, which would also be a way
+ * to log in without approval.
  */
 add_filter( 'allow_password_reset', 'clu_block_pending_password_reset', 10, 2 );
 function clu_block_pending_password_reset( $allow, $user_id ) {
-    return clu_user_is_pending( get_userdata( $user_id ) ) ? false : $allow;
+    return clu_blocked_account_message( get_userdata( $user_id ) ) !== '' ? false : $allow;
 }
 
 /**
@@ -64,7 +94,7 @@ function clu_current_user_is_front_end_only() {
     }
 
     return (bool) array_intersect(
-        [ clu_get_role_slug( 'pending_role' ), clu_get_role_slug( 'approved_role' ) ],
+        [ clu_get_role_slug( 'pending_role' ), clu_get_role_slug( 'approved_role' ), clu_get_role_slug( 'rejected_role' ) ],
         (array) $user->roles
     );
 }

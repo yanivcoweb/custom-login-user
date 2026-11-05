@@ -5,7 +5,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Returns the configured role slug for a given slot.
  *
- * @param string $type  'pending_role' or 'approved_role'
+ * @param string $type  'pending_role', 'approved_role' or 'rejected_role'
  * @return string       The role slug
  */
 function clu_get_role_slug( $type ) {
@@ -13,6 +13,7 @@ function clu_get_role_slug( $type ) {
     $defaults = [
         'pending_role'  => 'pending_user',
         'approved_role' => 'approved_user',
+        'rejected_role' => 'rejected_user', // Not a setting: rejected users always get this one.
     ];
 
     return ( is_array( $options ) && ! empty( $options[ $type ] ) ) ? $options[ $type ] : $defaults[ $type ];
@@ -30,6 +31,18 @@ function clu_add_roles() {
 
     add_role( 'pending_user', __( 'Pending User', 'custom-login-users' ), $capabilities );
     add_role( 'approved_user', __( 'Approved User', 'custom-login-users' ), $capabilities );
+    clu_add_rejected_role();
+}
+
+/**
+ * Adds the role of rejected users, if it is missing. It holds no capabilities.
+ */
+function clu_add_rejected_role() {
+    add_role( 'rejected_user', __( 'Rejected User', 'custom-login-users' ), [
+        'read'         => false,
+        'edit_posts'   => false,
+        'delete_posts' => false,
+    ] );
 }
 
 /**

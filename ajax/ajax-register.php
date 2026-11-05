@@ -20,16 +20,15 @@ function clu_handle_ajax_register() {
         wp_send_json_success( [ 'message' => clu_render_message( 'register_success' ) ] );
     }
 
-    $email  = sanitize_email( clu_post_text( 'email' ) );
-    $fields = [];
+    $values = clu_read_posted_fields( clu_get_register_form_fields() );
 
-    foreach ( [ 'first_name', 'last_name', 'company', 'customer_type', 'region', 'country' ] as $name ) {
-        $fields[ $name ] = clu_post_text( $name );
+    if ( is_wp_error( $values ) ) {
+        wp_send_json_error( [ 'message' => clu_field_error_message( $values, 'register_required_fields' ) ] );
     }
 
-    if ( ! is_email( $email ) || in_array( '', $fields, true ) ) {
-        wp_send_json_error( [ 'message' => clu_render_message( 'register_required_fields' ) ] );
-    }
+    $email      = $values['email'];
+    $first_name = $values['first_name'] ?? '';
+    $last_name  = $values['last_name'] ?? '';
 
     if ( email_exists( $email ) ) {
         wp_send_json_error( [ 'message' => clu_render_message( 'email_already_registered' ) ] );
@@ -39,23 +38,29 @@ function clu_handle_ajax_register() {
         wp_send_json_error( [ 'message' => clu_render_message( 'too_many_attempts' ) ] );
     }
 
+    // Saved before anything else hears about the new user, because the email to the
+    // admin lists these values.
+    $save_values = function ( $user_id ) use ( $values ) {
+        clu_save_user_field_values( $user_id, $values );
+    };
+
+    add_action( 'user_register', $save_values, 1 );
+
     $user_id = wp_insert_user( wp_slash( [
-        'user_login' => clu_generate_user_login( $fields['first_name'], $fields['last_name'], $email ),
+        'user_login' => clu_generate_user_login( $first_name, $last_name, $email ),
         'user_email' => $email,
         // Nobody ever sees this password: the approval email lets the user choose one.
         'user_pass'  => wp_generate_password( 24 ),
-        'first_name' => $fields['first_name'],
-        'last_name'  => $fields['last_name'],
-        'nickname'   => $fields['first_name'] . ' ' . $fields['last_name'],
+        'first_name' => $first_name,
+        'last_name'  => $last_name,
+        'nickname'   => trim( $first_name . ' ' . $last_name ),
         'role'       => clu_get_registration_role(),
     ] ) );
 
+    remove_action( 'user_register', $save_values, 1 );
+
     if ( is_wp_error( $user_id ) ) {
         wp_send_json_error( [ 'message' => wp_kses_post( $user_id->get_error_message() ) ] );
-    }
-
-    foreach ( [ 'company', 'customer_type', 'region', 'country' ] as $name ) {
-        update_user_meta( $user_id, $name, wp_slash( $fields[ $name ] ) );
     }
 
     wp_send_json_success( [ 'message' => clu_render_message( 'register_success' ) ] );

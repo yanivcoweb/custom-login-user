@@ -12,11 +12,34 @@ function clu_save_extra_user_fields( $user_id ) {
         return;
     }
 
-    foreach ( [ 'company', 'customer_type', 'region', 'country' ] as $field ) {
-        if ( isset( $_POST[ $field ] ) ) {
-            update_user_meta( $user_id, $field, wp_slash( clu_post_text( $field ) ) );
+    foreach ( clu_get_register_fields() as $field ) {
+        $key = $field['key'];
+
+        if ( in_array( $key, [ 'first_name', 'last_name', 'email' ], true ) || ! isset( $_POST[ $key ] ) || ! is_string( $_POST[ $key ] ) ) {
+            continue;
         }
+
+        $value = $field['type'] === 'textarea' ? sanitize_textarea_field( wp_unslash( $_POST[ $key ] ) ) : clu_post_text( $key ); // phpcs:ignore WordPress.Security
+
+        update_user_meta( $user_id, $key, wp_slash( $value ) );
     }
+}
+
+/**
+ * Returns the fields for the user screen in wp-admin: those on the register form, and
+ * others only where this user has a value, so a field turned off does not hide data.
+ *
+ * @param WP_User $user
+ * @return array[]
+ */
+function clu_get_admin_profile_fields( $user ) {
+    return array_values( array_filter( clu_get_register_fields(), function ( $field ) use ( $user ) {
+        if ( in_array( $field['key'], [ 'first_name', 'last_name', 'email' ], true ) ) {
+            return false; // WordPress shows these itself.
+        }
+
+        return $field['enabled'] || clu_get_user_field_value( $user, $field ) !== '';
+    } ) );
 }
 
 /**
@@ -44,6 +67,11 @@ function clu_add_user_columns( $columns ) {
         }
     }
 
+    // Only on the lists where someone decides on registrations, to keep the others short.
+    if ( in_array( clu_query_text( 'role' ), [ clu_get_role_slug( 'pending_role' ), clu_get_role_slug( 'rejected_role' ) ], true ) ) {
+        $new_columns['clu_details'] = __( 'Registration Details', 'custom-login-users' );
+    }
+
     return $new_columns;
 }
 
@@ -57,6 +85,13 @@ function clu_user_column_content( $output, $column_name, $user_id ) {
         $user = get_userdata( $user_id );
 
         return $user ? esc_html( date_i18n( get_option( 'date_format' ), strtotime( $user->user_registered ) ) ) : '';
+    }
+
+    if ( $column_name === 'clu_details' ) {
+        $user = get_userdata( $user_id );
+
+        // The list has its own email column.
+        return $user ? clu_format_user_details( array_diff_key( clu_get_user_details( $user ), [ 'email' => true ] ) ) : '';
     }
 
     return $output;

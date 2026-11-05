@@ -75,6 +75,95 @@ jQuery(function ($) {
         };
     }
 
+    /* ── Register fields ──────────────────────────────────────────────── */
+
+    const $fieldRows = $('#clu-fields-rows');
+
+    // The built-in fields have no type control, and only a dropdown has options.
+    function syncFieldRow($row) {
+        const $type = $row.find('.clu-field-type');
+
+        if ($type.length) {
+            $row.find('.clu-field-options-wrap').prop('hidden', $type.val() !== 'select');
+            $row.find('.clu-field-placeholder').prop('disabled', $type.val() === 'checkbox');
+        }
+    }
+
+    $fieldRows.find('.clu-field-row').each(function () {
+        syncFieldRow($(this));
+    });
+
+    $fieldRows.on('change', '.clu-field-type', function () {
+        syncFieldRow($(this).closest('.clu-field-row'));
+    });
+
+    $fieldRows.on('click', '.clu-field-up', function () {
+        const $row = $(this).closest('.clu-field-row');
+
+        $row.prev().before($row);
+        $(this).trigger('focus');
+    });
+
+    $fieldRows.on('click', '.clu-field-down', function () {
+        const $row = $(this).closest('.clu-field-row');
+
+        $row.next().after($row);
+        $(this).trigger('focus');
+    });
+
+    $fieldRows.on('click', '.clu-field-remove', function () {
+        const $row = $(this).closest('.clu-field-row');
+
+        if ($row.attr('data-key') && !window.confirm('Remove this field? What users already filled in stays in the database, but it will no longer show.')) {
+            return;
+        }
+
+        $row.remove();
+    });
+
+    $('#clu-add-field-btn').on('click', function () {
+        const $row = $($('#clu-field-row-template').html().trim());
+
+        $fieldRows.append($row);
+        syncFieldRow($row);
+        $row.find('.clu-field-label').trigger('focus');
+    });
+
+    $('#clu-save-fields-btn').on('click', function () {
+        const $result = $('#clu-save-fields-result');
+
+        const fields = $fieldRows.find('.clu-field-row').map(function () {
+            const $row  = $(this);
+            const $type = $row.find('.clu-field-type');
+
+            return {
+                key: $row.attr('data-key'),
+                type: $type.length ? $type.val() : $row.attr('data-type'),
+                label: $row.find('.clu-field-label').val(),
+                enabled: $row.find('.clu-field-enabled').is(':checked'),
+                required: $row.find('.clu-field-required').is(':checked'),
+                account: $row.find('.clu-field-account').is(':checked'),
+                placeholder: $row.find('.clu-field-placeholder').val(),
+                options: ($row.find('.clu-field-options').val() || '').split('\n'),
+            };
+        }).get();
+
+        post($(this), $('#clu-save-fields-spinner'), $result, {
+            action: 'clu_save_register_fields',
+            nonce: config.registerFieldsNonce,
+            fields: JSON.stringify(fields),
+        }, function (response) {
+            reportMessage($result)(response);
+
+            if (response.success) {
+                // Rows keep their order on the server, so they can learn their keys in turn.
+                $fieldRows.find('.clu-field-row').each(function (index) {
+                    $(this).attr('data-key', response.data.keys[index]);
+                });
+            }
+        });
+    });
+
     /* ── Password rules ───────────────────────────────────────────────── */
 
     $('#clu-save-pw-rules-btn').on('click', function () {

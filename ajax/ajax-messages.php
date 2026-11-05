@@ -11,7 +11,7 @@ function clu_save_messages_handler() {
     }
 
     // Subject lines must be plain text; all other fields allow safe HTML via wp_kses_post
-    $subject_keys = [ 'reset_email_subject', 'notify_client_subject', 'notify_user_subject' ];
+    $subject_keys = [ 'reset_email_subject', 'notify_client_subject', 'notify_user_subject', 'notify_rejected_subject' ];
     $saved        = [];
 
     foreach ( array_keys( clu_default_messages() ) as $key ) {

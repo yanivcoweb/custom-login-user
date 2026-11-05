@@ -15,31 +15,18 @@ $required_error = $text( 'required_field_error' );
         <input type="hidden" name="action" value="ajax_update_profile">
         <input type="hidden" name="my_account_profile_nonce" value="<?php echo esc_attr( wp_create_nonce( 'my_account_profile_nonce' ) ); ?>">
 
-        <div class="form-row">
-            <label for="first_name"><?php echo esc_html( $text( 'first_name' ) ); ?></label>
-            <input type="text" name="first_name" id="first_name" custom-required autocomplete="given-name" aria-required="true" aria-describedby="first_name_error" value="<?php echo esc_attr( $attributes['first_name'] ); ?>">
-            <div class="error-message" id="first_name_error" data-inputid="first_name"><?php echo esc_html( $required_error ); ?></div>
-        </div>
+        <?php
+        // These have labels of their own on the My Account Form tab; the others use the
+        // label from the Register Fields tab.
+        $labels = [
+            'first_name' => $text( 'first_name' ),
+            'last_name'  => $text( 'last_name' ),
+            'email'      => $text( 'email' ),
+            'company'    => $text( 'company' ),
+        ];
 
-        <div class="form-row">
-            <label for="last_name"><?php echo esc_html( $text( 'last_name' ) ); ?></label>
-            <input type="text" name="last_name" id="last_name" custom-required autocomplete="family-name" aria-required="true" aria-describedby="last_name_error" value="<?php echo esc_attr( $attributes['last_name'] ); ?>">
-            <div class="error-message" id="last_name_error" data-inputid="last_name"><?php echo esc_html( $required_error ); ?></div>
-        </div>
-
-        <div class="form-row">
-            <label for="email"><?php echo esc_html( $text( 'email' ) ); ?></label>
-            <input type="email" name="email" id="email" custom-required autocomplete="email" aria-required="true" aria-describedby="email_error" value="<?php echo esc_attr( $attributes['email'] ); ?>">
-            <div class="error-message" id="email_error" data-inputid="email">
-                <span class="email-empty"><?php echo esc_html( $required_error ); ?></span>
-                <span class="email-invalid"><?php echo esc_html( $text( 'email_invalid_error' ) ); ?></span>
-            </div>
-        </div>
-
-        <div class="form-row">
-            <label for="company"><?php echo esc_html( $text( 'company' ) ); ?></label>
-            <input type="text" name="company" id="company" autocomplete="organization" value="<?php echo esc_attr( $attributes['company'] ); ?>">
-        </div>
+        echo clu_render_form_fields( $attributes['fields'], $attributes['values'], $required_error, $text( 'email_invalid_error' ), $labels ); // phpcs:ignore WordPress.Security.EscapeOutput
+        ?>
 
         <p class="signup-submit">
             <input type="submit" class="register-button" value="<?php echo esc_attr( $text( 'profile_button' ) ); ?>">

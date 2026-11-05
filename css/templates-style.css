@@ -37,6 +37,14 @@
     padding: 16px;
     background: #fff;
 }
+#signupform input[type="checkbox"] {
+    width: auto;
+    padding: 0;
+    margin-inline-end: 6px;
+}
+.form-clu .form-row--checkbox label {
+    display: inline;
+}
 
 .error-message {
     color: #fa1515;

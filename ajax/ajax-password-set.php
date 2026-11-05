@@ -21,9 +21,12 @@ function clu_handle_ajax_password_set() {
         wp_send_json_error( [ 'message' => clu_render_message( 'invalid_reset_link' ) ] );
     }
 
-    // Covers a key issued before the user became pending, or before this check existed.
-    if ( clu_user_is_pending( $user ) ) {
-        wp_send_json_error( [ 'message' => clu_render_message( 'account_pending' ) ] );
+    // Covers a key issued before the user became pending or rejected, or before this
+    // check existed.
+    $blocked = clu_blocked_account_message( $user );
+
+    if ( $blocked !== '' ) {
+        wp_send_json_error( [ 'message' => clu_render_message( $blocked ) ] );
     }
 
     // Absent only on a copy of the form from before the field was added, in a page cache.

@@ -471,15 +471,19 @@ function clu_send_new_user_email( $user ) {
     $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
     $name      = esc_html( $user->display_name );
     $edit_url  = clu_normalize_site_url( add_query_arg( 'user_id', $user->ID, admin_url( 'user-edit.php' ) ) ) . '#role';
+    $list_url  = clu_normalize_site_url( admin_url( clu_pending_list_path() ) );
 
     $message = clu_format_message_template(
         clu_get_message( 'notify_client_body' ),
         [
-            '%1$s'             => $name,
-            '%2$s'             => $edit_url,
-            '{display_name}'   => $name,
-            '{edit_user_url}'  => $edit_url,
-            '{edit_user_link}' => clu_message_link( $edit_url, clu_get_message( 'email_edit_user_text' ) ),
+            '%1$s'                 => $name,
+            '%2$s'                 => $edit_url,
+            '{display_name}'       => $name,
+            '{user_details}'       => clu_format_user_details( clu_get_user_details( $user ) ),
+            '{edit_user_url}'      => $edit_url,
+            '{edit_user_link}'     => clu_message_link( $edit_url, clu_get_message( 'email_edit_user_text' ) ),
+            '{pending_users_url}'  => $list_url,
+            '{pending_users_link}' => clu_message_link( $list_url, clu_get_message( 'email_pending_list_text' ) ),
         ]
     );
 
@@ -491,10 +495,63 @@ function clu_send_new_user_email( $user ) {
     );
 }
 
+/**
+ * Acts on a role change, whether it came from the Approve and Reject links or from the
+ * role control on the user's screen.
+ */
 add_action( 'set_user_role', 'clu_on_user_role_change', 10, 3 );
 function clu_on_user_role_change( $user_id, $new_role, $old_roles ) {
-    if ( in_array( clu_get_role_slug( 'pending_role' ), (array) $old_roles, true ) && $new_role === clu_get_role_slug( 'approved_role' ) ) {
+    $pending  = clu_get_role_slug( 'pending_role' );
+    $rejected = clu_get_role_slug( 'rejected_role' );
+    $old      = (array) $old_roles;
+
+    if ( $new_role === clu_get_role_slug( 'approved_role' ) && ( in_array( $pending, $old, true ) || in_array( $rejected, $old, true ) ) ) {
         clu_send_set_password_email( $user_id );
+    }
+
+    if ( $new_role === $rejected && in_array( $pending, $old, true ) ) {
+        clu_send_rejection_email( $user_id );
+    }
+
+    // These accounts may not log in, so one that is logged in right now has to go too.
+    if ( $new_role === $pending || $new_role === $rejected ) {
+        WP_Session_Tokens::get_instance( $user_id )->destroy_all();
+    }
+}
+
+/**
+ * Tells a rejected user. Sites that prefer not to can turn this off with the filter,
+ * and deleting a user from the list sends nothing.
+ *
+ * @param int $user_id
+ */
+function clu_send_rejection_email( $user_id ) {
+    $user = get_userdata( $user_id );
+
+    /**
+     * Filters whether a rejected user gets an email.
+     *
+     * @param bool          $send
+     * @param WP_User|false $user
+     */
+    if ( ! $user || ! apply_filters( 'clu_send_rejection_email', true, $user ) ) {
+        return;
+    }
+
+    $mail_host = clu_get_mail_host();
+    $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
+    $name      = esc_html( $user->display_name );
+
+    $message = clu_format_message_template(
+        clu_get_message( 'notify_rejected_body' ),
+        [
+            '%1$s'           => $name,
+            '{display_name}' => $name,
+        ]
+    );
+
+    if ( ! wp_mail( $user->user_email, clu_format_subject( 'notify_rejected_subject', $user->display_name ), $message, $headers ) ) {
+        do_action( 'clu_decision_mail_failed', $user );
     }
 }
 
@@ -513,6 +570,7 @@ function clu_send_set_password_email( $user_id ) {
     $key = get_password_reset_key( $user );
 
     if ( is_wp_error( $key ) ) {
+        do_action( 'clu_decision_mail_failed', $user );
         return;
     }
 
@@ -535,7 +593,14 @@ function clu_send_set_password_email( $user_id ) {
         ]
     );
 
-    wp_mail( $user->user_email, clu_format_subject( 'notify_user_subject', $user->display_name ), $message, $headers );
+    if ( ! wp_mail( $user->user_email, clu_format_subject( 'notify_user_subject', $user->display_name ), $message, $headers ) ) {
+        /**
+         * Fires when an email about an approval or a rejection could not be sent.
+         *
+         * @param WP_User $user
+         */
+        do_action( 'clu_decision_mail_failed', $user );
+    }
 }
 
 /* ─── Reset keys ─────────────────────────────────────────────────────── */

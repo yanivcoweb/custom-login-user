@@ -218,9 +218,11 @@ function approved_role() { return clu_get_role_slug( 'approved_role' ); }
 function reset_state() {
     wp_set_current_user( 0 );
     $GLOBALS['clu_mails'] = [];
-    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles' ] as $o ) {
+    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_pending_count' ] as $o ) {
         delete_option( $o );
     }
+    delete_transient( 'clu_pending_count' );
+    clu_keep_legacy_register_fields();
     update_option( 'users_can_register', 1 );
     global $wpdb;
     $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_transient\_%clu\_rl\_%' OR option_name LIKE '\_transient\_timeout\_%clu\_rl\_%'" );
@@ -610,7 +612,548 @@ t( 'a javascript: address in the settings cannot become a link', stripos( $u, 'j
 remove_all_filters( 'pre_option_home' );
 
 reset_state();
-section( '15. Nonces, templates, settings, update and uninstall' );
+section( '15. Approve and reject' );
+require_once ABSPATH . 'wp-admin/includes/user.php';
+require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+/** Runs the users-screen handler the way a click does. Returns what it redirected to, or 'died'. */
+function decide( $action, $user_ids, $nonce = null, $as = 1 ) {
+    wp_set_current_user( $as );
+    $_REQUEST = [ 'action' => $action, 'users' => (array) $user_ids, '_wpnonce' => $nonce === null ? wp_create_nonce( 'bulk-users' ) : $nonce ];
+    $_GET     = $_REQUEST;
+    $target   = 'nothing';
+    $catch    = function ( $location ) use ( &$target ) {
+        $target = $location;
+        throw new CLU_Die();
+    };
+    add_filter( 'wp_redirect', $catch );
+    try {
+        clu_handle_user_decisions();
+    } catch ( CLU_Die $e ) {
+        if ( $target === 'nothing' ) {
+            $target = 'died';
+        }
+    }
+    remove_filter( 'wp_redirect', $catch );
+    $_REQUEST = $_GET = [];
+    wp_set_current_user( 0 );
+    return $target;
+}
+
+function query_of( $url ) {
+    parse_str( (string) wp_parse_url( $url, PHP_URL_QUERY ), $args );
+    return $args;
+}
+
+$u1 = make_user( 'clu_d1', 'clu-d1@example.test', 'Start1!pass', pending_role() );
+$u2 = make_user( 'clu_d2', 'clu-d2@example.test', 'Start1!pass', pending_role() );
+$u3 = make_user( 'clu_d3', 'clu-d3@example.test', 'Start1!pass', pending_role() );
+$plain = make_user( 'clu_d_plain', 'clu-dp@example.test', 'Start1!pass', 'subscriber' );
+
+wp_set_current_user( 1 );
+$actions = apply_filters( 'user_row_actions', [ 'edit' => 'x' ], get_userdata( $u1 ) );
+t( 'a pending user gets Approve and Reject links', isset( $actions['clu_approve'], $actions['clu_reject'], $actions['edit'] ) );
+$actions = apply_filters( 'user_row_actions', [], get_userdata( $plain ) );
+t( 'a user with another role gets neither', ! isset( $actions['clu_approve'] ) && ! isset( $actions['clu_reject'] ) );
+$bulk = apply_filters( 'bulk_actions-users', [] );
+t( 'both are bulk actions too', isset( $bulk['clu_approve'], $bulk['clu_reject'] ) );
+wp_set_current_user( $plain );
+$actions = apply_filters( 'user_row_actions', [], get_userdata( $u1 ) );
+t( 'someone who may not change roles gets no links', ! isset( $actions['clu_approve'] ) && ! apply_filters( 'bulk_actions-users', [] ) );
+wp_set_current_user( 0 );
+
+t( 'a request with a bad nonce does nothing', decide( 'clu_approve', $u1, 'bad' ) === 'died' && in_array( pending_role(), get_userdata( $u1 )->roles, true ) );
+$GLOBALS['clu_mails'] = [];
+$target = decide( 'clu_approve', $u1, null, $plain );
+t( 'a subscriber cannot approve', in_array( pending_role(), get_userdata( $u1 )->roles, true ) && ( query_of( $target )['clu_skipped'] ?? 0 ) == 1 && ! $GLOBALS['clu_mails'], $target );
+$target = decide( 'other_action', $u1 );
+t( 'other actions on the screen are left alone', $target === 'nothing' );
+
+$GLOBALS['clu_mails'] = [];
+$target = decide( 'clu_approve', $u1 );
+$mail   = last_mail();
+t( 'approve changes the role', in_array( approved_role(), get_userdata( $u1 )->roles, true ) );
+t( 'approve emails the set-password link', $mail && $mail['to'] === 'clu-d1@example.test' && strpos( $mail['message'], 'key=' ) !== false );
+t( 'the redirect reports it', ( query_of( $target )['clu_approved'] ?? 0 ) == 1, $target );
+t( 'the result does not stay in the address', in_array( 'clu_approved', wp_removable_query_args(), true ) );
+
+$GLOBALS['clu_mails'] = [];
+$target = decide( 'clu_reject', $u2 );
+$mail   = last_mail();
+$rejected_role = clu_get_role_slug( 'rejected_role' );
+t( 'reject moves the user to the rejected role', in_array( $rejected_role, get_userdata( $u2 )->roles, true ) && ! in_array( pending_role(), get_userdata( $u2 )->roles, true ) );
+t( 'reject emails the user', count( $GLOBALS['clu_mails'] ) === 1 && $mail['to'] === 'clu-d2@example.test' && strpos( $mail['subject'], 'not approved' ) !== false, $mail ? $mail['subject'] : 'no mail' );
+t( 'the email holds no reset link', strpos( $mail['message'], 'key=' ) === false );
+t( 'the redirect reports it', ( query_of( $target )['clu_rejected'] ?? 0 ) == 1, $target );
+
+wp_set_password( 'Start2!pass', $u2 );
+$res = login( 'clu_d2', 'Start2!pass' );
+t( 'a rejected user cannot log in', empty( $res['success'] ) && strpos( msg( $res ), 'not approved' ) !== false, msg( $res ) );
+t( '...through any form of the site', is_wp_error( wp_authenticate( 'clu_d2', 'Start2!pass' ) ) );
+$res = login( 'clu_d2', 'wrong' );
+t( 'a wrong password reveals nothing about the status', strpos( msg( $res ), 'not approved' ) === false, msg( $res ) );
+$GLOBALS['clu_mails'] = [];
+$res = lost( 'clu-d2@example.test' );
+t( 'a rejected user gets no reset link', ! $GLOBALS['clu_mails'] && empty( $res['success'] ), msg( $res ) );
+t( 'core refuses a reset key too', is_wp_error( get_password_reset_key( get_userdata( $u2 ) ) ) );
+$plain_key = wp_generate_password( 20, false );
+$wpdb->update( $wpdb->users, [ 'user_activation_key' => time() . ':' . wp_fast_hash( $plain_key ) ], [ 'ID' => $u2 ] );
+clean_user_cache( $u2 );
+$res = set_password( 'clu_d2', $plain_key, 'Str0ng!Passw0rd' );
+t( 'a key from before the rejection stops working', empty( $res['success'] ), msg( $res ) );
+
+wp_set_current_user( 1 );
+$actions = apply_filters( 'user_row_actions', [], get_userdata( $u2 ) );
+t( 'a rejected user can still be approved, and not rejected again', isset( $actions['clu_approve'] ) && ! isset( $actions['clu_reject'] ) );
+wp_set_current_user( 0 );
+$GLOBALS['clu_mails'] = [];
+decide( 'clu_approve', $u2 );
+$args = args_from_link( link_from_mail( last_mail() ) );
+t( 'approving a rejected user sends the set-password link', in_array( approved_role(), get_userdata( $u2 )->roles, true ) && ! empty( $args['key'] ) );
+$res = set_password( 'clu_d2', $args['key'] ?? '', 'Str0ng!Passw0rd' );
+t( '...and that link works', ! empty( $res['success'] ), msg( $res ) );
+wp_set_current_user( 0 );
+
+$u4 = make_user( 'clu_d4', 'clu-d4@example.test', 'Start1!pass', pending_role() );
+$GLOBALS['clu_mails'] = [];
+$target = decide( 'clu_reject', [ $u3, $u4, $plain, 1, 999999 ] );
+$q = query_of( $target );
+t( 'a bulk action handles several users at once', ( $q['clu_rejected'] ?? 0 ) == 2 && count( $GLOBALS['clu_mails'] ) === 2, $target );
+t( 'a bulk action skips anyone not waiting', ( $q['clu_skipped'] ?? 0 ) == 3 && in_array( 'subscriber', get_userdata( $plain )->roles, true ) && user_can( 1, 'manage_options' ), $target );
+wp_set_current_user( 0 );
+
+$u5 = make_user( 'clu_d5', 'clu-d5@example.test', 'Start1!pass', pending_role() );
+$fail = function () { return false; };
+add_filter( 'pre_wp_mail', $fail, 20 );
+$target = decide( 'clu_approve', $u5 );
+remove_filter( 'pre_wp_mail', $fail, 20 );
+$q = query_of( $target );
+t( 'a failed email is reported, and the decision still stands', ( $q['clu_mail_failed'] ?? 0 ) == 1 && ( $q['clu_approved'] ?? 0 ) == 1 && in_array( approved_role(), get_userdata( $u5 )->roles, true ), $target );
+
+$_GET = [ 'clu_approved' => '1', 'clu_rejected' => '2', 'clu_mail_failed' => '1', 'clu_skipped' => '3' ];
+$GLOBALS['pagenow'] = 'users.php';
+ob_start();
+clu_show_decision_notices();
+$notices = ob_get_clean();
+$GLOBALS['pagenow'] = 'index.php';
+$_GET = [];
+t( 'the screen shows what happened', substr_count( $notices, 'class="notice' ) === 4, $notices );
+
+$u6 = make_user( 'clu_d6', 'clu-d6@example.test', 'Start1!pass', pending_role() );
+$GLOBALS['clu_mails'] = [];
+get_userdata( $u6 )->set_role( $rejected_role );
+t( 'choosing the role on the user screen sends the same email', count( $GLOBALS['clu_mails'] ) === 1 && last_mail()['to'] === 'clu-d6@example.test' );
+$u7 = make_user( 'clu_d7', 'clu-d7@example.test', 'Start1!pass', approved_role() );
+$manager = WP_Session_Tokens::get_instance( $u7 );
+$manager->create( time() + 3600 );
+$GLOBALS['clu_mails'] = [];
+get_userdata( $u7 )->set_role( $rejected_role );
+t( 'moving an approved user there sends no rejection email', ! $GLOBALS['clu_mails'] );
+t( '...and logs them out', ! $manager->get_all() );
+wp_set_current_user( $u7 );
+t( 'a rejected user is kept out of the dashboard too', clu_current_user_is_front_end_only() );
+wp_set_current_user( 0 );
+
+$u8 = make_user( 'clu_d8', 'clu-d8@example.test', 'Start1!pass', pending_role() );
+add_filter( 'clu_send_rejection_email', '__return_false' );
+$GLOBALS['clu_mails'] = [];
+$target = decide( 'clu_reject', $u8 );
+remove_filter( 'clu_send_rejection_email', '__return_false' );
+t( 'the rejection email can be turned off, and that is no failure', ! $GLOBALS['clu_mails'] && empty( query_of( $target )['clu_mail_failed'] ), $target );
+update_option( 'clu_messages', [ 'notify_rejected_subject' => '100% no for %s' ] );
+$u9 = make_user( 'clu_d9', 'clu-d9@example.test', 'Start1!pass', pending_role() );
+$GLOBALS['clu_mails'] = [];
+decide( 'clu_reject', $u9 );
+t( 'a % in the rejection subject is safe', last_mail() && last_mail()['subject'] === '100% no for Test User', last_mail() ? last_mail()['subject'] : 'no mail' );
+delete_option( 'clu_messages' );
+
+reset_state();
+wp_set_current_user( 1 );
+$res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => 'rejected_user', 'approved_role' => 'approved_user' ], 1 );
+t( 'the rejected role cannot be the pending role', empty( $res['success'] ), msg( $res ) );
+wp_set_current_user( 1 );
+$res = ajax( 'clu_delete_role', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'role_slug' => 'rejected_user' ], 1 );
+t( 'the rejected role cannot be deleted', empty( $res['success'] ) && get_role( 'rejected_user' ), msg( $res ) );
+ob_start();
+clu_render_roles_tab();
+$tab = ob_get_clean();
+t( 'the Roles tab does not offer it', strpos( $tab, 'value="rejected_user"' ) === false );
+wp_set_current_user( 0 );
+
+section( '16. The count of users awaiting approval' );
+reset_state();
+foreach ( get_users( [ 'role' => pending_role(), 'fields' => 'ID' ] ) as $uid ) {
+    get_userdata( $uid )->set_role( 'subscriber' );
+}
+t( 'it starts at zero', clu_get_pending_count() === 0, (string) clu_get_pending_count() );
+t( 'zero is remembered', get_transient( 'clu_pending_count' ) !== false );
+$res = register( [ 'email' => 'clu-count1@example.test' ] );
+$res = register( [ 'email' => 'clu-count2@example.test' ] );
+t( 'it follows new registrations', clu_get_pending_count() === 2, (string) clu_get_pending_count() );
+$cu1 = get_user_by( 'email', 'clu-count1@example.test' );
+decide( 'clu_approve', $cu1->ID );
+t( 'it follows decisions', clu_get_pending_count() === 1, (string) clu_get_pending_count() );
+$cu2 = get_user_by( 'email', 'clu-count2@example.test' );
+wp_delete_user( $cu2->ID );
+t( 'it follows deleted users', clu_get_pending_count() === 0, (string) clu_get_pending_count() );
+
+$res = register( [ 'email' => 'clu-count3@example.test' ] );
+$GLOBALS['menu']    = [ 70 => [ 'Users', 'list_users', 'users.php', '', 'menu-top', 'menu-users', 'dashicons-admin-users' ] ];
+$GLOBALS['submenu'] = [];
+wp_set_current_user( 1 );
+clu_add_pending_menu();
+t( 'the Users menu shows the count', strpos( $GLOBALS['menu'][70][0], 'awaiting-mod' ) !== false && strpos( $GLOBALS['menu'][70][0], '>1<' ) !== false, $GLOBALS['menu'][70][0] );
+$sub = end( $GLOBALS['submenu']['users.php'] ) ?: [];
+t( 'the menu links to the list of those users', ( $sub[2] ?? '' ) === 'users.php?role=' . pending_role(), print_r( $sub, true ) );
+$GLOBALS['menu'] = [ 70 => [ 'Users', 'list_users', 'users.php' ] ];
+$GLOBALS['submenu'] = [];
+wp_set_current_user( $plain );
+clu_add_pending_menu();
+t( 'someone who may not decide does not see it', $GLOBALS['menu'][70][0] === 'Users' && ! $GLOBALS['submenu'] );
+wp_set_current_user( 0 );
+unset( $GLOBALS['menu'], $GLOBALS['submenu'] );
+
+section( '17. Register fields' );
+
+/** Saves a field list through the settings screen's handler. */
+function save_fields( $rows ) {
+    wp_set_current_user( 1 );
+    $nonce = wp_create_nonce( 'clu_register_fields_nonce' );
+    $res   = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => wp_json_encode( $rows ) ], 1 );
+    wp_set_current_user( 0 );
+    return $res;
+}
+
+/** A row of the field list, changed from what is saved now. */
+function field_row( $key, $over = [] ) {
+    foreach ( clu_get_register_fields() as $field ) {
+        if ( $field['key'] === $key ) {
+            return array_merge( $field, $over );
+        }
+    }
+    return array_merge( [ 'key' => $key, 'label' => 'New', 'type' => 'text', 'enabled' => true, 'required' => false, 'account' => false, 'placeholder' => '', 'options' => [] ], $over );
+}
+
+function all_rows( $changes = [], $extra = [] ) {
+    $rows = [];
+    foreach ( clu_get_register_fields() as $field ) {
+        $rows[] = array_merge( $field, $changes[ $field['key'] ] ?? [] );
+    }
+    return array_merge( $rows, $extra );
+}
+
+reset_state();
+delete_option( 'clu_register_fields' );
+$keys = array_column( clu_get_register_form_fields(), 'key' );
+t( 'a new site asks only for names and email', $keys === [ 'first_name', 'last_name', 'email' ], implode( ',', $keys ) );
+$res = ajax( 'ajax_register_user', [ 'register_nonce' => nonce_for( 'register_form_nonce' ), 'first_name' => 'A', 'last_name' => 'B', 'email' => 'clu-new@example.test' ] );
+t( '...and registers with just those', ! empty( $res['success'] ) && get_user_by( 'email', 'clu-new@example.test' ), msg( $res ) );
+$html = render_shortcode_safe( $SC_REG );
+t( '...and the form has just those', strpos( $html, 'name="first_name"' ) !== false && strpos( $html, 'name="company"' ) === false && strpos( $html, 'name="region"' ) === false, substr( $html, 0, 300 ) );
+
+reset_state();
+$res = save_fields( all_rows( [
+    'company'       => [ 'enabled' => false ],
+    'customer_type' => [ 'required' => false ],
+    'region'        => [ 'enabled' => false ],
+    'country'       => [ 'enabled' => false ],
+] ) );
+t( 'the handler saves', ! empty( $res['success'] ), msg( $res ) );
+$html = render_shortcode_safe( $SC_REG );
+t( 'a field turned off leaves the form', strpos( $html, 'name="company"' ) === false );
+$email = 'clu-off@example.test';
+$res   = register( [ 'email' => $email, 'company' => 'Should not stay', 'customer_type' => '' ] );
+$u     = get_user_by( 'email', $email );
+t( 'a field turned off is not required', ! empty( $res['success'] ), msg( $res ) );
+t( '...and what is posted for it is ignored', $u && get_user_meta( $u->ID, 'company', true ) === '' );
+t( 'an optional field may stay empty', $u && get_user_meta( $u->ID, 'customer_type', true ) === '' );
+$html = render_shortcode_safe( $SC_REG );
+t( 'an optional field is not marked required', (bool) preg_match( '/<select name="customer_type" id="customer_type">/', $html ), substr( $html, 0, 400 ) );
+
+reset_state();
+$res = save_fields( all_rows( [ 'email' => [ 'enabled' => false, 'required' => false, 'account' => false ], 'first_name' => [ 'enabled' => false, 'label' => 'Nope' ], 'last_name' => [ 'enabled' => false ], 'company' => [ 'enabled' => false ], 'customer_type' => [ 'enabled' => false ], 'region' => [ 'enabled' => false ], 'country' => [ 'enabled' => false ] ] ) );
+$email_field = array_values( array_filter( clu_get_register_fields(), function ( $f ) { return $f['key'] === 'email'; } ) )[0];
+t( 'the email cannot be turned off', $email_field['enabled'] && $email_field['required'] && $email_field['account'] );
+$email = 'dana.only@example.test';
+$res   = ajax( 'ajax_register_user', [ 'register_nonce' => nonce_for( 'register_form_nonce' ), 'email' => $email ] );
+$u     = get_user_by( 'email', $email );
+t( 'a form with only an email works', ! empty( $res['success'] ) && $u, msg( $res ) );
+t( '...the username comes from the email', $u && strpos( $u->user_login, 'dana.only' ) === 0, $u ? $u->user_login : '' );
+t( '...and so does the display name', $u && $u->display_name !== '', $u ? $u->display_name : '' );
+wp_set_current_user( 0 );
+
+reset_state();
+$res = save_fields( all_rows( [ 'email' => [ 'label' => 'כתובת דוא"ל' ] ], [
+    [ 'key' => '', 'label' => 'Phone number', 'type' => 'tel', 'enabled' => true, 'required' => true, 'account' => true ],
+    [ 'key' => '', 'label' => 'מספר עובדים', 'type' => 'number', 'enabled' => true, 'required' => false, 'account' => false ],
+    [ 'key' => '', 'label' => 'Website', 'type' => 'url', 'enabled' => true, 'required' => false, 'account' => false ],
+    [ 'key' => '', 'label' => 'Notes', 'type' => 'textarea', 'enabled' => true, 'required' => false, 'account' => false ],
+    [ 'key' => '', 'label' => 'Plan', 'type' => 'select', 'enabled' => true, 'required' => true, 'account' => false, 'options' => [ 'Basic', 'Pro', ' ', 'Pro' ] ],
+    [ 'key' => '', 'label' => 'I agree to the <a href="/terms/" target="_blank">terms</a><script>x</script>', 'type' => 'checkbox', 'enabled' => true, 'required' => true, 'account' => false ],
+] ) );
+t( 'new fields are saved', ! empty( $res['success'] ), msg( $res ) );
+$keys = $res['data']['keys'] ?? [];
+t( 'the screen learns their keys', in_array( 'clu_field_phone_number', $keys, true ), implode( ',', $keys ) );
+t( 'a label in Hebrew still gets a key', in_array( 'clu_field_custom', $keys, true ), implode( ',', $keys ) );
+$plan = array_values( array_filter( clu_get_register_fields(), function ( $f ) { return $f['key'] === 'clu_field_plan'; } ) )[0] ?? [];
+t( 'dropdown options are cleaned', ( $plan['options'] ?? [] ) === [ 'Basic', 'Pro' ], print_r( $plan['options'] ?? null, true ) );
+$terms = array_values( array_filter( clu_get_register_fields(), function ( $f ) { return $f['type'] === 'checkbox'; } ) )[0] ?? [];
+t( 'a checkbox label keeps its link and loses anything else', strpos( $terms['label'] ?? '', '<a href="/terms/"' ) !== false && strpos( $terms['label'] ?? '', '<script' ) === false, $terms['label'] ?? '' );
+$terms_key = $terms['key'] ?? '';
+$html = render_shortcode_safe( $SC_REG );
+t( 'new fields reach the form', strpos( $html, 'type="tel"' ) !== false && strpos( $html, 'name="clu_field_plan"' ) !== false && strpos( $html, '<textarea' ) !== false );
+t( 'the checkbox label shows its link', strpos( $html, '<a href="/terms/"' ) !== false && strpos( $html, '<script' ) === false );
+t( 'a label from the settings is escaped', strpos( $html, 'כתובת דוא&quot;ל' ) !== false || strpos( $html, 'כתובת דוא"ל' ) !== false );
+
+$ok = [ 'clu_field_phone_number' => '+972 (50) 123-4567', 'clu_field_plan' => 'Pro', $terms_key => '1' ];
+$email = 'clu-custom@example.test';
+$GLOBALS['clu_mails'] = [];
+$res = register( array_merge( $ok, [
+    'email'                 => $email,
+    'clu_field_custom'      => '12',
+    'clu_field_website'     => 'example.com',
+    'clu_field_notes'       => "line one\nline two<script>x</script>",
+] ) );
+$u = get_user_by( 'email', $email );
+t( 'a registration with custom fields succeeds', ! empty( $res['success'] ) && $u, msg( $res ) );
+t( 'the values are saved under their keys', $u && get_user_meta( $u->ID, 'clu_field_plan', true ) === 'Pro' && get_user_meta( $u->ID, 'clu_field_custom', true ) === '12' && get_user_meta( $u->ID, $terms_key, true ) === '1' );
+t( 'a web address is completed', $u && get_user_meta( $u->ID, 'clu_field_website', true ) === 'http://example.com', $u ? get_user_meta( $u->ID, 'clu_field_website', true ) : '' );
+t( 'long text keeps its lines and loses tags', $u && get_user_meta( $u->ID, 'clu_field_notes', true ) === "line one\nline twox" || ( $u && strpos( get_user_meta( $u->ID, 'clu_field_notes', true ), '<script' ) === false && strpos( get_user_meta( $u->ID, 'clu_field_notes', true ), "\n" ) !== false ), $u ? get_user_meta( $u->ID, 'clu_field_notes', true ) : '' );
+$admin_mail = $GLOBALS['clu_mails'][0] ?? null;
+t( 'the admin email lists the details', $admin_mail && strpos( $admin_mail['message'], 'Phone number' ) !== false && strpos( $admin_mail['message'], '+972 (50) 123-4567' ) !== false && strpos( $admin_mail['message'], $email ) !== false, $admin_mail ? $admin_mail['message'] : 'no mail' );
+t( 'it links to the list of users awaiting approval', $admin_mail && strpos( $admin_mail['message'], 'users.php?role=' . pending_role() ) !== false );
+
+foreach ( [
+    'a required custom field'  => [ 'clu_field_phone_number' => '' ],
+    'a required checkbox'      => [ $terms_key => '' ],
+    'a required dropdown'      => [ 'clu_field_plan' => '' ],
+] as $label => $over ) {
+    $email = 'clu-req' . wp_generate_password( 6, false ) . '@example.test';
+    $res   = register( array_merge( $ok, $over, [ 'email' => $email ] ) );
+    t( "$label is enforced on the server", empty( $res['success'] ) && ! get_user_by( 'email', $email ), msg( $res ) );
+}
+foreach ( [
+    'a choice outside the dropdown' => [ 'clu_field_plan' => 'Free forever' ],
+    'a number that is not one'      => [ 'clu_field_custom' => 'twelve' ],
+    'a phone with letters'          => [ 'clu_field_phone_number' => 'call me' ],
+    'a javascript: web address'     => [ 'clu_field_website' => 'javascript:alert(1)' ],
+    'a web address with spaces'     => [ 'clu_field_website' => 'not a url' ],
+    'a region outside the list'     => [ 'region' => 'Atlantis' ],
+    'a country of another region'   => [ 'region' => 'Europe', 'country' => 'Japan' ],
+] as $label => $over ) {
+    $email = 'clu-bad' . wp_generate_password( 6, false ) . '@example.test';
+    $res   = register( array_merge( $ok, $over, [ 'email' => $email ] ) );
+    t( "$label is refused", empty( $res['success'] ) && ! get_user_by( 'email', $email ), msg( $res ) );
+}
+$res = register( array_merge( $ok, [ 'email' => 'clu-badnum@example.test', 'clu_field_custom' => 'x' ] ) );
+t( 'the answer names the field', strpos( msg( $res ), 'מספר עובדים' ) !== false, msg( $res ) );
+$email = 'clu-arr@example.test';
+$res   = register( array_merge( $ok, [ 'email' => $email, 'clu_field_phone_number' => [ 'x' ] ] ) );
+t( 'an array in a custom field does not crash', empty( $res['exception'] ) && empty( $res['success'] ), msg( $res ) );
+$email = 'clu-forge@example.test';
+$res   = register( array_merge( $ok, [ 'email' => $email, 'wp_capabilities' => 'administrator', 'role' => 'administrator', 'clu_field_other' => 'x' ] ) );
+$u     = get_user_by( 'email', $email );
+t( 'nothing outside the field list reaches the account', $u && ! user_can( $u, 'manage_options' ) && get_user_meta( $u->ID, 'clu_field_other', true ) === '' && in_array( pending_role(), $u->roles, true ), $u ? implode( ',', $u->roles ) : msg( $res ) );
+
+$rows = all_rows();
+$res  = save_fields( array_merge( $rows, [ [ 'key' => 'wp_capabilities', 'label' => 'Sneaky', 'type' => 'text', 'enabled' => true ] ] ) );
+$keys = array_column( clu_get_register_fields(), 'key' );
+t( 'a field cannot be saved under a key of its own choosing', ! in_array( 'wp_capabilities', $keys, true ) && in_array( 'clu_field_sneaky', $keys, true ), implode( ',', $keys ) );
+$res = save_fields( all_rows( [ 'clu_field_sneaky' => [ 'label' => 'Renamed' ] ] ) );
+$keys = array_column( clu_get_register_fields(), 'key' );
+t( 'renaming a field keeps its key, and so its data', in_array( 'clu_field_sneaky', $keys, true ) && ! in_array( 'clu_field_renamed', $keys, true ) );
+$res = save_fields( all_rows( [ 'company' => [ 'type' => 'checkbox' ] ] ) );
+$company = array_values( array_filter( clu_get_register_fields(), function ( $f ) { return $f['key'] === 'company'; } ) )[0];
+t( 'a built-in field keeps its type', $company['type'] === 'text' );
+$before = get_option( 'clu_register_fields' );
+$res = save_fields( all_rows( [ 'company' => [ 'label' => '  ' ] ] ) );
+t( 'an empty label is refused, and nothing changes', empty( $res['success'] ) && get_option( 'clu_register_fields' ) === $before, msg( $res ) );
+$res = save_fields( all_rows( [], [ [ 'key' => '', 'label' => 'Empty list', 'type' => 'select', 'enabled' => true, 'options' => [ '', ' ' ] ] ] ) );
+t( 'a dropdown without options is refused', empty( $res['success'] ), msg( $res ) );
+$reordered = array_reverse( all_rows() );
+save_fields( $reordered );
+$keys = array_column( clu_get_register_fields(), 'key' );
+t( 'the order is kept', $keys === array_column( $reordered, 'key' ), implode( ',', $keys ) );
+save_fields( array_slice( all_rows(), 0, 2 ) );
+$keys = array_column( clu_get_register_fields(), 'key' );
+t( 'a built-in field cannot be removed', count( array_intersect( [ 'first_name', 'last_name', 'email', 'company', 'customer_type', 'region', 'country' ], $keys ) ) === 7, implode( ',', $keys ) );
+t( '...and a removed custom field is gone', ! in_array( 'clu_field_plan', $keys, true ) || in_array( 'clu_field_plan', array_column( array_slice( all_rows(), 0, 2 ), 'key' ), true ), implode( ',', $keys ) );
+wp_set_current_user( 0 );
+$res = ajax( 'clu_save_register_fields', [ 'nonce' => 'x', 'fields' => '[]' ] );
+t( 'visitors cannot save fields', empty( $res['success'] ) );
+$subscriber = make_user( 'clu_sub_f', 'clu-subf@example.test', 'Start1!pass', 'subscriber' );
+wp_set_current_user( $subscriber );
+$nonce = wp_create_nonce( 'clu_register_fields_nonce' );
+$res = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => '[]' ], $subscriber );
+t( 'a subscriber cannot save fields', empty( $res['success'] ), msg( $res ) );
+wp_set_current_user( 1 );
+$nonce = wp_create_nonce( 'clu_register_fields_nonce' );
+$res = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => 'not json' ], 1 );
+t( 'broken data is refused', empty( $res['success'] ) && empty( $res['not_json'] ), msg( $res ) );
+wp_set_current_user( 0 );
+
+reset_state();
+$html = render_shortcode_safe( $SC_REG );
+t( 'with a region field, the country list waits for the region', (bool) preg_match( '/name="country"[^>]*>\s*<option value="">[^<]*<\/option>\s*<\/select>/', $html ), substr( $html, strpos( $html, 'name="country"' ) ?: 0, 200 ) );
+save_fields( all_rows( [ 'region' => [ 'enabled' => false ] ] ) );
+$html = render_shortcode_safe( $SC_REG );
+t( 'without one, the country list offers every country', strpos( $html, 'value="France"' ) !== false && strpos( $html, 'value="Japan"' ) !== false );
+$email = 'clu-country@example.test';
+$res   = register( [ 'email' => $email, 'country' => 'Japan' ] );
+t( '...and accepts any of them', ! empty( $res['success'] ), msg( $res ) );
+
+reset_state();
+wp_dequeue_script( 'clu-register' );
+wp_deregister_script( 'clu-register' );
+render_shortcode_safe( $SC_REG );
+clu_register_assets();
+t( 'the country list works when a theme renders the form before the scripts register', wp_script_is( 'clu-register', 'enqueued' ) && strpos( (string) wp_scripts()->get_data( 'clu-register', 'data' ), 'cluRegions' ) !== false && strpos( (string) wp_scripts()->get_data( 'clu-register', 'data' ), 'France' ) !== false );
+wp_dequeue_script( 'clu-register' );
+save_fields( all_rows( [ 'country' => [ 'enabled' => false ] ] ) );
+render_shortcode_safe( $SC_REG );
+t( 'its script stays away from a form without both fields', ! wp_script_is( 'clu-register', 'enqueued' ) );
+
+section( '18. My Account follows the field list' );
+reset_state();
+save_fields( all_rows( [ 'company' => [ 'required' => false ] ], [
+    [ 'key' => '', 'label' => 'Phone', 'type' => 'tel', 'enabled' => true, 'required' => false, 'account' => true ],
+    [ 'key' => '', 'label' => 'Membership', 'type' => 'select', 'enabled' => true, 'required' => false, 'account' => false, 'options' => [ 'Gold' ] ],
+] ) );
+$ma = make_user( 'clu_ma', 'clu-ma@example.test', 'Start1!pass', approved_role() );
+update_user_meta( $ma, 'clu_field_membership', 'Gold' );
+update_user_meta( $ma, 'customer_type', 'Installer' );
+wp_set_current_user( $ma );
+$html = render_shortcode_safe( $SC_ACC );
+t( 'a field marked for My Account shows there', strpos( $html, 'name="clu_field_phone"' ) !== false );
+t( 'a field not marked for it does not', strpos( $html, 'name="clu_field_membership"' ) === false && strpos( $html, 'name="customer_type"' ) === false );
+$profile = function ( $over ) use ( $ma ) {
+    wp_set_current_user( $ma );
+    return ajax( 'ajax_update_profile', array_merge( [ 'my_account_profile_nonce' => wp_create_nonce( 'my_account_profile_nonce' ), 'first_name' => 'A', 'last_name' => 'B', 'email' => 'clu-ma@example.test' ], $over ), $ma );
+};
+$res = $profile( [ 'clu_field_phone' => '050-1234567' ] );
+t( 'it can be changed there', ! empty( $res['success'] ) && get_user_meta( $ma, 'clu_field_phone', true ) === '050-1234567', msg( $res ) );
+$res = $profile( [ 'clu_field_phone' => 'nope' ] );
+t( 'an invalid value is refused there too', empty( $res['success'] ) && get_user_meta( $ma, 'clu_field_phone', true ) === '050-1234567', msg( $res ) );
+$res = $profile( [ 'clu_field_membership' => 'Platinum', 'customer_type' => 'Consultant' ] );
+t( 'a forged request cannot change a field the form does not show', get_user_meta( $ma, 'clu_field_membership', true ) === 'Gold' && get_user_meta( $ma, 'customer_type', true ) === 'Installer' );
+$res = $profile( [ 'wp_capabilities' => 'administrator' ] );
+t( 'nor anything else', ! user_can( $ma, 'manage_options' ) );
+$res = $profile( [ 'first_name' => '' ] );
+t( 'a required name stays required', empty( $res['success'] ) );
+save_fields( all_rows( [ 'first_name' => [ 'enabled' => false ], 'last_name' => [ 'enabled' => false, 'account' => false ] ] ) );
+$res = $profile( [ 'first_name' => '', 'last_name' => 'Ignored' ] );
+t( 'a name the register form does not ask for is optional', ! empty( $res['success'] ) && get_userdata( $ma )->first_name === '', msg( $res ) );
+t( 'a name left out of My Account stays as it is', get_userdata( $ma )->last_name === 'B', get_userdata( $ma )->last_name );
+save_fields( all_rows( [ 'country' => [ 'account' => true ], 'region' => [ 'account' => true ], 'clu_field_membership' => [ 'account' => true ] ] ) );
+update_user_meta( $ma, 'region', 'Europe' );
+update_user_meta( $ma, 'country', 'France' );
+wp_set_current_user( $ma );
+$html = render_shortcode_safe( $SC_ACC );
+t( 'the country list opens on the saved region', (bool) preg_match( '/value="France"\s+selected/', $html ) && strpos( $html, 'value="Japan"' ) === false );
+save_fields( all_rows( [ 'clu_field_membership' => [ 'options' => [ 'Silver' ] ] ] ) );
+wp_set_current_user( $ma );
+$html = render_shortcode_safe( $SC_ACC );
+t( 'a saved value that left the dropdown stays on the form', (bool) preg_match( '/value="Gold"\s+selected/', $html ) );
+$res = $profile( [ 'region' => 'Europe', 'country' => 'France', 'clu_field_membership' => 'Gold', 'first_name' => 'A' ] );
+t( '...and can still be saved', ! empty( $res['success'] ) && get_user_meta( $ma, 'clu_field_membership', true ) === 'Gold', msg( $res ) );
+$res = $profile( [ 'region' => 'Europe', 'country' => 'France', 'clu_field_membership' => 'Platinum', 'first_name' => 'A' ] );
+t( '...but another value outside it cannot', empty( $res['success'] ), msg( $res ) );
+wp_set_current_user( 0 );
+
+section( '19. The admin screens follow the field list' );
+reset_state();
+save_fields( all_rows( [ 'region' => [ 'enabled' => false ], 'country' => [ 'enabled' => false ] ], [
+    [ 'key' => '', 'label' => 'Notes', 'type' => 'textarea', 'enabled' => true, 'required' => false, 'account' => false ],
+    [ 'key' => '', 'label' => 'Newsletter', 'type' => 'checkbox', 'enabled' => true, 'required' => false, 'account' => false ],
+] ) );
+if ( $bare ) {
+    $ad = make_user( 'clu_ad', 'clu-ad@example.test', 'Start1!pass', 'subscriber' );
+    update_user_meta( $ad, 'country', 'France' );
+    wp_set_current_user( 1 );
+    $html = clu_get_template_html( 'user_extra_fields', get_userdata( $ad ) );
+    t( 'the user screen shows the fields on the form', strpos( $html, 'name="clu_field_notes"' ) !== false && strpos( $html, 'name="company"' ) !== false );
+    t( 'a field turned off shows only where there is a value', strpos( $html, 'name="country"' ) !== false && strpos( $html, 'name="region"' ) === false );
+    $_POST = wp_slash( [ 'clu_field_notes' => "a\nb<script>x</script>", 'clu_field_newsletter' => '1', 'first_name' => 'Keep' ] );
+    do_action( 'edit_user_profile_update', $ad );
+    $_POST = [];
+    t( 'long text is saved with its lines, and clean', strpos( get_user_meta( $ad, 'clu_field_notes', true ), "\n" ) !== false && strpos( get_user_meta( $ad, 'clu_field_notes', true ), '<script' ) === false, get_user_meta( $ad, 'clu_field_notes', true ) );
+    t( 'a ticked box is saved', get_user_meta( $ad, 'clu_field_newsletter', true ) === '1' );
+    $_POST = wp_slash( [ 'clu_field_newsletter' => '' ] );
+    do_action( 'edit_user_profile_update', $ad );
+    $_POST = [];
+    t( 'an unticked box is saved as such', get_user_meta( $ad, 'clu_field_newsletter', true ) === '' );
+    wp_set_current_user( 0 );
+
+    $_GET = [ 'role' => pending_role() ];
+    $columns = apply_filters( 'manage_users_columns', [ 'username' => 'Username', 'email' => 'Email' ] );
+    $_GET = [ 'role' => 'subscriber' ];
+    $other = apply_filters( 'manage_users_columns', [ 'username' => 'Username' ] );
+    $_GET = [];
+    t( 'the list of waiting users has a details column', isset( $columns['clu_details'] ) );
+    t( 'other lists do not', ! isset( $other['clu_details'] ) );
+    update_user_meta( $ad, 'company', '<b>Acme</b> & sons' );
+    $cell = apply_filters( 'manage_users_custom_column', '', 'clu_details', $ad );
+    t( 'the column lists the details, escaped, without the email', strpos( $cell, '&lt;b&gt;Acme' ) !== false && strpos( $cell, '<b>Acme' ) === false && strpos( $cell, 'clu-ad@example.test' ) === false && strpos( $cell, 'France' ) !== false, $cell );
+}
+
+ob_start();
+wp_set_current_user( 1 );
+clu_render_register_fields_tab();
+$tab = ob_get_clean();
+wp_set_current_user( 0 );
+t( 'the settings tab lists every field', strpos( $tab, 'data-key="clu_field_notes"' ) !== false && strpos( $tab, 'data-key="email"' ) !== false && strpos( $tab, 'id="clu-field-row-template"' ) !== false );
+t( 'the email row cannot be turned off there', (bool) preg_match( '/data-key="email".*?clu-field-enabled"[^>]*disabled/s', $tab ) );
+
+section( '20. Updating from an older version' );
+reset_state();
+delete_option( 'clu_register_fields' );
+update_option( 'clu_register_form', [ 'company' => 'שם החברה', 'register_title' => 'Join' ] );
+update_option( 'clu_db_version', '1.1.0' );
+clu_maybe_upgrade();
+$fields = array_column( clu_get_register_fields(), null, 'key' );
+t( 'an updated site keeps all of its form fields on and required', $fields['company']['enabled'] && $fields['customer_type']['enabled'] && $fields['region']['required'] && $fields['country']['enabled'] );
+t( 'it keeps the labels it saved', $fields['company']['label'] === 'שם החברה', $fields['company']['label'] );
+t( 'it keeps the company field in My Account', $fields['company']['account'] );
+t( 'it keeps the placeholders it had', $fields['first_name']['placeholder'] === 'First Name' && $fields['company']['placeholder'] === 'Company Name' );
+t( 'it gets the rejected role', (bool) get_role( 'rejected_user' ) );
+t( 'the version is recorded', get_option( 'clu_db_version' ) === CLU_VERSION );
+update_option( 'clu_register_fields', [] );
+$saved = [ [ 'key' => 'email', 'label' => 'X', 'enabled' => true ] ];
+update_option( 'clu_register_fields', $saved );
+update_option( 'clu_db_version', '1.1.0' );
+clu_maybe_upgrade();
+t( 'an update does not overwrite a saved field list', get_option( 'clu_register_fields' ) === $saved );
+
+reset_state();
+$old_body = "Hello,<br><br>{display_name} has registered on the website.<br><br>To approve the registration, click the link below and change the user role from \"Pending User\" to \"Approved User\": {edit_user_link}<br><br>";
+update_option( 'clu_messages', [ 'notify_client_body' => $old_body, 'login_success' => 'שלום' ] );
+update_option( 'clu_db_version', '1.1.0' );
+clu_maybe_upgrade();
+$saved = get_option( 'clu_messages' );
+t( 'the old default of the admin email makes way for the new one', ! isset( $saved['notify_client_body'] ) && ( $saved['login_success'] ?? '' ) === 'שלום' );
+update_option( 'clu_messages', [ 'notify_client_body' => 'My own text {edit_user_link}' ] );
+update_option( 'clu_db_version', '1.1.0' );
+clu_maybe_upgrade();
+t( 'an admin email the site wrote itself stays', ( get_option( 'clu_messages' )['notify_client_body'] ?? '' ) === 'My own text {edit_user_link}' );
+delete_option( 'clu_messages' );
+
+reset_state();
+delete_option( 'clu_register_fields' );
+delete_option( 'clu_db_version' );
+remove_role( 'pending_user' );
+wp_cache_flush();
+clu_maybe_upgrade();
+t( 'a new site gets the short form', ! in_array( 'company', array_column( clu_get_register_form_fields(), 'key' ), true ) );
+t( 'and no field in My Account that nobody asked for', ! in_array( 'company', array_column( clu_get_account_fields(), 'key' ), true ) );
+t( 'and all three roles', get_role( 'pending_user' ) && get_role( 'approved_user' ) && get_role( 'rejected_user' ) );
+reset_state();
+delete_option( 'clu_register_fields' );
+delete_option( 'clu_db_version' );
+clu_maybe_upgrade();
+t( 'a site from 1.0 counts as an update', in_array( 'company', array_column( clu_get_register_form_fields(), 'key' ), true ) );
+
+reset_state();
+section( '21. Nonces, templates, settings, update and uninstall' );
 {
     $res = ajax( 'clu_refresh_nonce', [ 'field' => 'login_nonce' ] );
     wp_set_current_user( 0 );
@@ -718,7 +1261,7 @@ section( '15. Nonces, templates, settings, update and uninstall' );
     $marker_id = make_user( 'clu_uninst', 'clu-uninst@example.test', 'Start1!pass', 'subscriber' );
     update_user_meta( $marker_id, 'clu_approval_link', 1 );
     update_option( 'clu_mail', [ 'from_name' => 'x' ] );
-    foreach ( [ 'pending_user', 'approved_user' ] as $r ) {
+    foreach ( [ 'pending_user', 'approved_user', 'rejected_user' ] as $r ) {
         foreach ( get_users( [ 'role' => $r, 'fields' => 'ID' ] ) as $uid ) {
             get_userdata( $uid )->set_role( 'subscriber' );
         }
@@ -728,11 +1271,12 @@ section( '15. Nonces, templates, settings, update and uninstall' );
     require CLU_PLUGIN_DIR . 'uninstall.php';
     wp_cache_flush();
     t( 'uninstall removes the settings', get_option( 'clu_mail', 'gone' ) === 'gone' && get_option( 'clu_db_version', 'gone' ) === 'gone' );
-    t( 'uninstall removes the unused roles', ! get_role( 'pending_user' ) && ! get_role( 'approved_user' ) );
+    t( 'uninstall removes the unused roles', ! get_role( 'pending_user' ) && ! get_role( 'approved_user' ) && ! get_role( 'rejected_user' ) );
+    t( 'uninstall removes the field list', get_option( 'clu_register_fields', 'gone' ) === 'gone' );
     t( 'uninstall removes the flag on users', ! get_user_meta( $marker_id, 'clu_approval_link', true ) );
 }
 
-section( '16. PHP warnings raised from inside the plugin during all of the above' );
+section( '22. PHP warnings raised from inside the plugin during all of the above' );
 $warnings = array_values( array_unique( $GLOBALS['clu_php_warnings'] ) );
 t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", array_slice( $warnings, 0, 12 ) ) );
 

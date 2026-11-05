@@ -20,40 +20,7 @@ function clu_render_register_form( $attributes ) {
     }
 
     clu_enqueue_form_assets();
-    wp_enqueue_script( 'clu-register' );
+    clu_enqueue_region_script( clu_get_register_form_fields() );
 
     return clu_get_template_html( 'form_register', clu_parse_form_attributes( $attributes ) );
-}
-
-/**
- * Returns a placeholder for a register form field: from ACF options where a site
- * set one up, otherwise the given text.
- *
- * @param string $acf_field ACF options field.
- * @param string $fallback
- * @return string
- */
-function clu_register_placeholder( $acf_field, $fallback ) {
-    $value = function_exists( 'get_field' ) ? get_field( $acf_field, 'option' ) : '';
-
-    return is_string( $value ) && $value !== '' ? $value : $fallback;
-}
-
-/**
- * Returns the choices for the customer type field: from an ACF options repeater
- * where a site set one up, otherwise a built-in list.
- *
- * @return string[]
- */
-function clu_get_customer_type_options() {
-    $choices = [];
-
-    if ( function_exists( 'have_rows' ) && have_rows( 'customer_type_options', 'options' ) ) {
-        while ( have_rows( 'customer_type_options', 'options' ) ) {
-            the_row();
-            $choices[] = (string) get_sub_field( 'customer_type_opt_text' );
-        }
-    }
-
-    return $choices ?: [ 'Distributor', 'Integrator', 'Installer', 'Consultant', 'End-user' ];
 }

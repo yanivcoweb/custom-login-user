@@ -16,12 +16,18 @@ function clu_render_my_account() {
 
     clu_enqueue_form_assets();
 
-    $user = wp_get_current_user();
+    $user   = wp_get_current_user();
+    $fields = clu_get_account_fields();
+    $values = [];
+
+    foreach ( $fields as $field ) {
+        $values[ $field['key'] ] = clu_get_user_field_value( $user, $field );
+    }
+
+    clu_enqueue_region_script( $fields );
 
     return clu_get_template_html( 'form_my_account', [
-        'first_name' => $user->first_name,
-        'last_name'  => $user->last_name,
-        'email'      => $user->user_email,
-        'company'    => get_user_meta( $user->ID, 'company', true ),
+        'fields' => $fields,
+        'values' => $values,
     ] );
 }

@@ -30,6 +30,10 @@ function clu_save_roles_handler() {
         wp_send_json_error( [ 'message' => 'A role that can manage the site or other users cannot be used here.' ] );
     }
 
+    if ( in_array( clu_get_role_slug( 'rejected_role' ), [ $pending, $approved ], true ) ) {
+        wp_send_json_error( [ 'message' => 'The Rejected User role is kept for rejected users and cannot be used here.' ] );
+    }
+
     if ( $pending === $approved ) {
         wp_send_json_error( [ 'message' => 'The pending role and the approved role must be different.' ] );
     }
@@ -106,6 +110,10 @@ function clu_delete_role_handler() {
 
     if ( $slug === clu_get_role_slug( 'pending_role' ) || $slug === clu_get_role_slug( 'approved_role' ) ) {
         wp_send_json_error( [ 'message' => 'This role is assigned above as the pending or approved role. Choose another role there first.' ] );
+    }
+
+    if ( $slug === clu_get_role_slug( 'rejected_role' ) ) {
+        wp_send_json_error( [ 'message' => 'The plugin uses this role for rejected users.' ] );
     }
 
     if ( get_users( [ 'role' => $slug, 'number' => 1, 'fields' => 'ID' ] ) ) {

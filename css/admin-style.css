@@ -73,3 +73,37 @@
 .clu-status--warning {
     color: #b32d2e;
 }
+
+/* Register Fields tab */
+.clu-fields-table {
+    margin-top: 12px;
+}
+.clu-fields-table td,
+.clu-fields-table th {
+    vertical-align: top;
+}
+.clu-fields-table .regular-text {
+    width: 100%;
+    max-width: 220px;
+}
+.clu-fields-table textarea {
+    display: block;
+    width: 100%;
+    max-width: 220px;
+    margin-top: 6px;
+}
+.clu-field-check {
+    text-align: center;
+}
+.clu-field-move {
+    white-space: nowrap;
+}
+.clu-field-move .button-link {
+    padding: 0 4px;
+    font-size: 16px;
+    text-decoration: none;
+}
+.clu-field-row:first-child .clu-field-up,
+.clu-field-row:last-child .clu-field-down {
+    visibility: hidden;
+}

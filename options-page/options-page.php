@@ -33,6 +33,7 @@ function clu_enqueue_admin_assets( $hook ) {
         'messagesNonce'      => wp_create_nonce( 'clu_messages_nonce' ),
         'rolesNonce'         => wp_create_nonce( 'clu_roles_nonce' ),
         'createPagesNonce'   => wp_create_nonce( 'clu_create_pages_nonce' ),
+        'registerFieldsNonce' => wp_create_nonce( 'clu_register_fields_nonce' ),
     ] );
 }
 
@@ -70,6 +71,10 @@ function clu_get_settings_tabs() {
             'fields_file'    => $fields_dir . 'array_register_form.php',
             'option_name'    => 'clu_register_form',
             'shortcode'      => '[clu_register_form]',
+        ],
+        'register-fields-settings' => [
+            'title' => 'Register Fields',
+            'type'  => 'register_fields',
         ],
         'login-form-settings' => [
             'title'          => 'Login Form',
@@ -146,7 +151,9 @@ function clu_render_settings_page() {
         </nav>
         <?php foreach ( $tabs as $tab_id => $tab ) : ?>
             <div id="<?php echo esc_attr( $tab_id ); ?>" class="tab-content">
-                <?php if ( ( $tab['type'] ?? '' ) === 'password_rules' ) : ?>
+                <?php if ( ( $tab['type'] ?? '' ) === 'register_fields' ) : ?>
+                    <?php clu_render_register_fields_tab(); ?>
+                <?php elseif ( ( $tab['type'] ?? '' ) === 'password_rules' ) : ?>
                     <?php clu_render_password_rules_tab(); ?>
                 <?php elseif ( ( $tab['type'] ?? '' ) === 'messages' ) : ?>
                     <?php clu_render_messages_tab(); ?>
@@ -163,6 +170,9 @@ function clu_render_settings_page() {
                                 &nbsp;Add <code>show_title="true"</code> to show the form title.
                             <?php endif; ?>
                         </p>
+                    <?php endif; ?>
+                    <?php if ( $tab_id === 'register-form-settings' ) : ?>
+                        <p>The fields of this form and their labels are on the <strong>Register Fields</strong> tab.</p>
                     <?php endif; ?>
                     <form method="post" action="options.php">
                         <?php
@@ -247,6 +257,119 @@ function clu_register_settings() {
             );
         }
     }
+}
+
+function clu_render_register_fields_tab() {
+    $new_field = [
+        'key'         => '',
+        'label'       => '',
+        'type'        => 'text',
+        'enabled'     => true,
+        'required'    => false,
+        'account'     => true,
+        'placeholder' => '',
+        'options'     => [],
+    ];
+    ?>
+    <h2>Register Fields</h2>
+    <p>Choose what the register form asks for, in what order, and what users can change later on the My Account form. The email is always on, because the approval flow runs through it.</p>
+    <p class="description">A checkbox label can hold a link, for example <code>I agree to the &lt;a href="/terms/"&gt;terms&lt;/a&gt;</code>.</p>
+
+    <table class="widefat striped clu-fields-table">
+        <thead>
+            <tr>
+                <th scope="col">Order</th>
+                <th scope="col">On the form</th>
+                <th scope="col">Label</th>
+                <th scope="col">Type</th>
+                <th scope="col">Required</th>
+                <th scope="col">In My Account</th>
+                <th scope="col">Placeholder</th>
+                <th scope="col"><span class="screen-reader-text">Remove</span></th>
+            </tr>
+        </thead>
+        <tbody id="clu-fields-rows">
+            <?php foreach ( clu_get_register_fields() as $field ) : ?>
+                <?php clu_render_register_field_row( $field ); ?>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+
+    <template id="clu-field-row-template">
+        <?php clu_render_register_field_row( $new_field ); ?>
+    </template>
+
+    <p style="margin-top:16px;">
+        <button type="button" id="clu-add-field-btn" class="button">Add Field</button>
+    </p>
+    <p>
+        <button type="button" id="clu-save-fields-btn" class="button button-primary">Save Register Fields</button>
+        <span id="clu-save-fields-spinner" class="spinner"></span>
+    </p>
+    <div id="clu-save-fields-result"></div>
+    <?php
+}
+
+/**
+ * Prints one row of the Register Fields table.
+ *
+ * @param array $field
+ */
+function clu_render_register_field_row( $field ) {
+    $is_builtin = clu_is_builtin_field( $field['key'] );
+    $is_email   = $field['key'] === 'email';
+    $is_select  = $field['type'] === 'select';
+    $types      = [ 'email' => 'Email', 'region' => 'Region list', 'country' => 'Country list, follows the region' ] + clu_custom_field_types();
+    $from_acf   = $field['key'] === 'customer_type' && clu_get_acf_customer_types();
+    ?>
+    <tr class="clu-field-row" data-key="<?php echo esc_attr( $field['key'] ); ?>" data-type="<?php echo esc_attr( $field['type'] ); ?>">
+        <td class="clu-field-move">
+            <button type="button" class="button-link clu-field-up" aria-label="Move up">&uarr;</button>
+            <button type="button" class="button-link clu-field-down" aria-label="Move down">&darr;</button>
+        </td>
+        <td class="clu-field-check">
+            <input type="checkbox" class="clu-field-enabled" aria-label="On the form" <?php checked( $field['enabled'] ); ?> <?php disabled( $is_email ); ?>>
+        </td>
+        <td>
+            <input type="text" class="clu-field-label regular-text" aria-label="Label" value="<?php echo esc_attr( $field['label'] ); ?>">
+        </td>
+        <td>
+            <?php if ( $is_builtin ) : ?>
+                <?php echo esc_html( $types[ $field['type'] ] ?? $field['type'] ); ?>
+            <?php else : ?>
+                <select class="clu-field-type" aria-label="Type">
+                    <?php foreach ( clu_custom_field_types() as $type => $label ) : ?>
+                        <option value="<?php echo esc_attr( $type ); ?>" <?php selected( $field['type'], $type ); ?>><?php echo esc_html( $label ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            <?php endif; ?>
+
+            <?php if ( $is_select || ! $is_builtin ) : ?>
+                <div class="clu-field-options-wrap" <?php echo $is_select ? '' : 'hidden'; ?>>
+                    <?php if ( $from_acf ) : ?>
+                        <p class="description">This site takes these choices from its ACF options page.</p>
+                    <?php else : ?>
+                        <textarea class="clu-field-options" rows="4" aria-label="Options, one per line" placeholder="One option per line"><?php echo esc_textarea( implode( "\n", $field['options'] ) ); ?></textarea>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+        </td>
+        <td class="clu-field-check">
+            <input type="checkbox" class="clu-field-required" aria-label="Required" <?php checked( $field['required'] ); ?> <?php disabled( $is_email ); ?>>
+        </td>
+        <td class="clu-field-check">
+            <input type="checkbox" class="clu-field-account" aria-label="In My Account" <?php checked( $field['account'] ); ?> <?php disabled( $is_email ); ?>>
+        </td>
+        <td>
+            <input type="text" class="clu-field-placeholder regular-text" aria-label="Placeholder" value="<?php echo esc_attr( $field['placeholder'] ); ?>">
+        </td>
+        <td>
+            <?php if ( ! $is_builtin ) : ?>
+                <button type="button" class="button-link button-link-delete clu-field-remove">Remove</button>
+            <?php endif; ?>
+        </td>
+    </tr>
+    <?php
 }
 
 function clu_render_password_rules_tab() {
@@ -337,7 +460,9 @@ function clu_render_messages_tab() {
             'login_success'               => 'Login: success',
             'login_failed'                => 'Login: wrong details',
             'account_pending'             => 'Account awaiting approval',
+            'account_rejected'            => 'Account rejected',
             'register_required_fields'    => 'Register: required fields missing',
+            'register_invalid_field'      => 'Register and My Account: a value is not valid (<code>{field}</code> = its label)',
             'email_already_registered'    => 'Register: email already registered',
             'register_success'            => 'Register: success',
             'email_required'              => 'Password lost: email required',
@@ -373,17 +498,20 @@ function clu_render_messages_tab() {
         ],
         'Email Templates' => [
             'email_link_text'       => 'Text of the link in password emails',
-            'email_edit_user_text'  => 'Text of the link in the email to the admin',
+            'email_edit_user_text'  => 'Text of the {edit_user_link} link in the email to the admin',
+            'email_pending_list_text' => 'Text of the {pending_users_link} link in the email to the admin',
             'reset_email_subject'   => 'Password reset email — subject',
             'reset_email_body'      => 'Password reset email — body (<code>{display_name}</code> = name, <code>{reset_url}</code> = reset URL, <code>{reset_link}</code> = link)',
             'notify_client_subject' => 'New registration email to admin — subject (<code>%s</code> = name)',
-            'notify_client_body'    => 'New registration email to admin — body (<code>{display_name}</code> = name, <code>{edit_user_url}</code> = edit user URL, <code>{edit_user_link}</code> = link)',
+            'notify_client_body'    => 'New registration email to admin — body (<code>{display_name}</code> = name, <code>{user_details}</code> = what the user filled in, <code>{pending_users_link}</code> = link to the users awaiting approval, <code>{pending_users_url}</code> = its URL, <code>{edit_user_link}</code> = link to edit this user, <code>{edit_user_url}</code> = its URL)',
             'notify_user_subject'   => 'Account approved email to user — subject (<code>%s</code> = name)',
             'notify_user_body'      => 'Account approved email to user — body (<code>{display_name}</code> = name, <code>{set_password_url}</code> = set-password URL, <code>{set_password_link}</code> = link)',
+            'notify_rejected_subject' => 'Registration rejected email to user — subject (<code>%s</code> = name)',
+            'notify_rejected_body'  => 'Registration rejected email to user — body (<code>{display_name}</code> = name)',
         ],
     ];
 
-    $editor_keys = [ 'already_logged_in', 'reset_email_body', 'notify_client_body', 'notify_user_body' ];
+    $editor_keys = [ 'already_logged_in', 'reset_email_body', 'notify_client_body', 'notify_user_body', 'notify_rejected_body' ];
     ?>
     <h2>Plugin Messages</h2>
     <p>Edit the text shown to users. Leave a field blank to use the built-in default.</p>
@@ -444,7 +572,7 @@ function clu_render_roles_tab() {
     $assignable = array_filter(
         $all_roles,
         function ( $slug ) {
-            return ! clu_role_is_privileged( $slug );
+            return ! clu_role_is_privileged( $slug ) && $slug !== clu_get_role_slug( 'rejected_role' );
         },
         ARRAY_FILTER_USE_KEY
     );
@@ -480,6 +608,7 @@ function clu_render_roles_tab() {
             </td>
         </tr>
     </table>
+    <p class="description">Rejecting a user from the <strong>Users</strong> list moves them to the Rejected User role and sends them an email. They cannot log in, and you can still approve them later, or delete them.</p>
 
     <p>
         <button type="button" id="clu-save-roles-btn" class="button button-primary">Save Role Assignments</button>
@@ -524,7 +653,7 @@ function clu_render_roles_tab() {
                 <select id="clu-delete-role-select">
                     <option value="">— Select a role —</option>
                     <?php
-                    $protected = [ 'administrator', 'editor', 'author', 'contributor', 'subscriber' ];
+                    $protected = [ 'administrator', 'editor', 'author', 'contributor', 'subscriber', clu_get_role_slug( 'rejected_role' ) ];
                     foreach ( $all_roles as $slug => $role ) :
                         if ( in_array( $slug, $protected, true ) ) {
                             continue;

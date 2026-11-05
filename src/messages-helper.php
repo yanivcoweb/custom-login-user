@@ -45,9 +45,12 @@ function clu_default_messages() {
         'login_success'              => 'Login successful!',
         'login_failed'               => 'The username, email or password is incorrect.',
         'account_pending'            => 'Your account is awaiting approval. We will email you as soon as it is approved.',
+        'account_rejected'           => 'Your registration was not approved.',
 
         // ── AJAX: Register ───────────────────────────────────────────────
         'register_required_fields'   => 'Please fill in all required fields.',
+        // {field} is replaced at runtime with the label of the field.
+        'register_invalid_field'     => 'Please check this field: {field}',
         'email_already_registered'   => 'This email address is already registered.',
         'register_success'           => 'Thank you for registering! We will email you as soon as your account is approved.',
 
@@ -96,6 +99,7 @@ function clu_default_messages() {
         // ── Email: shared ────────────────────────────────────────────────
         'email_link_text'            => 'Link',
         'email_edit_user_text'       => 'Edit User',
+        'email_pending_list_text'    => 'Users awaiting approval',
 
         // ── Email: Password Lost (sent to user) ──────────────────────────
         // {display_name} = display name, {reset_url} = reset URL, {reset_link} = linked text
@@ -105,14 +109,22 @@ function clu_default_messages() {
         // ── Email: New Registration (sent to admin) ──────────────────────
         // %s or {display_name} = display name
         'notify_client_subject'      => 'Website: New registration by %s',
-        // {display_name} = display name, {edit_user_url} = edit URL, {edit_user_link} = linked text
-        'notify_client_body'         => "Hello,<br><br>{display_name} has registered on the website.<br><br>To approve the registration, click the link below and change the user role from \"Pending User\" to \"Approved User\": {edit_user_link}<br><br>",
+        // {display_name} = display name, {user_details} = what the user filled in,
+        // {pending_users_url} and {pending_users_link} = the list of users awaiting approval,
+        // {edit_user_url} = edit URL, {edit_user_link} = linked text
+        'notify_client_body'         => "Hello,<br><br>{display_name} has registered on the website.<br><br>{user_details}<br><br>To approve or reject the registration, open the list: {pending_users_link}<br><br>",
 
         // ── Email: Account Approved (sent to user) ───────────────────────
         // %s or {display_name} = display name
         'notify_user_subject'        => 'Website: Account approved for %s',
         // {display_name} = display name, {set_password_url} = reset URL, {set_password_link} = linked text
         'notify_user_body'           => "Hello,<br><br>{display_name}, your account has been approved!<br><br>To set your password and access your account, click the following link:<br><br>{set_password_link}<br><br>If you have any questions, please contact us.<br><br>Thank you.",
+
+        // ── Email: Registration Rejected (sent to user) ──────────────────
+        // %s or {display_name} = display name
+        'notify_rejected_subject'    => 'Website: Registration not approved for %s',
+        // {display_name} = display name
+        'notify_rejected_body'       => "Hello {display_name},<br><br>Thank you for your interest. We could not approve your registration.<br><br>If you think this is a mistake, please contact us.",
     ];
 }
 
@@ -139,4 +151,18 @@ function clu_migrate_saved_messages() {
     }
 
     update_option( 'clu_messages', $saved );
+}
+
+/**
+ * Removes the old default of the admin email from saved messages, so that it gets the
+ * new links and the user's details. The same reason as above: only an exact match goes.
+ */
+function clu_migrate_saved_admin_email() {
+    $saved = get_option( 'clu_messages' );
+    $old   = "Hello,<br><br>{display_name} has registered on the website.<br><br>To approve the registration, click the link below and change the user role from \"Pending User\" to \"Approved User\": {edit_user_link}<br><br>";
+
+    if ( is_array( $saved ) && isset( $saved['notify_client_body'] ) && $saved['notify_client_body'] === $old ) {
+        unset( $saved['notify_client_body'] );
+        update_option( 'clu_messages', $saved );
+    }
 }

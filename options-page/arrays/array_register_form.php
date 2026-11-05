@@ -10,48 +10,6 @@ return [
         'default'     => 'Register Now',
     ],
     [
-        'field'       => 'first_name',
-        'label'       => 'First Name Label',
-        'placeholder' => 'Enter the label for the first name field',
-        'default'     => 'First Name',
-    ],
-    [
-        'field'       => 'last_name',
-        'label'       => 'Last Name Label',
-        'placeholder' => 'Enter the label for the last name field',
-        'default'     => 'Last Name',
-    ],
-    [
-        'field'       => 'email',
-        'label'       => 'Email Label',
-        'placeholder' => 'Enter the label for the email field',
-        'default'     => 'Email Address',
-    ],
-    [
-        'field'       => 'company',
-        'label'       => 'Company Label',
-        'placeholder' => 'Enter the label for the company field',
-        'default'     => 'Company Name',
-    ],
-    [
-        'field'       => 'customer_type',
-        'label'       => 'Customer Type Label',
-        'placeholder' => 'Enter the label for the customer type field',
-        'default'     => 'Customer Type',
-    ],
-    [
-        'field'       => 'region',
-        'label'       => 'Region Label',
-        'placeholder' => 'Enter the label for the region field',
-        'default'     => 'Region',
-    ],
-    [
-        'field'       => 'country',
-        'label'       => 'Country Label',
-        'placeholder' => 'Enter the label for the country field',
-        'default'     => 'Country',
-    ],
-    [
         'field'       => 'register_btn_text',
         'label'       => 'Register Button Text',
         'placeholder' => 'Enter the text for the register button',
