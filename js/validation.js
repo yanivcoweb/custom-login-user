@@ -1,498 +1,244 @@
-console.log('validation.js 2.4.01');
+/* Front-end forms: validation in the browser, then submission over AJAX. */
+(function () {
+    'use strict';
 
-document.addEventListener('DOMContentLoaded', function () {
-    const forms = document.querySelectorAll('.form-validation'); // Select all forms with the shared class
-	//console.log('forms',forms);
-	
-	function validatePassword(password) {
-		var rules    = (typeof ajaxData !== 'undefined' && ajaxData.passwordRules)    ? ajaxData.passwordRules    : {};
-		var messages = (typeof ajaxData !== 'undefined' && ajaxData.passwordMessages) ? ajaxData.passwordMessages : {};
-		var minLength = parseInt(rules.min_length, 10) || 6;
+    const config   = window.cluData || {};
+    const messages = config.messages || {};
 
-		var errors = [];
+    // Where each form shows the server's answer.
+    const RESPONSE_ELEMENTS = {
+        'loginform': 'login-response',
+        'passwordlostform': 'password-lost-response',
+        'signupform': 'signupform-register-response',
+        'setpassform': 'password-set-response',
+        'my-account-profile-form': 'my-account-profile-response',
+        'my-account-password-form': 'my-account-password-response',
+    };
 
-		if (password.length < minLength) {
-			errors.push(messages.min_length || 'Password must be at least ' + minLength + ' characters long.');
-		}
-		if (rules.require_uppercase == 1 && !/[A-Z]/.test(password)) {
-			errors.push(messages.uppercase || 'Password must contain at least one uppercase letter (A-Z).');
-		}
-		if (rules.require_lowercase == 1 && !/[a-z]/.test(password)) {
-			errors.push(messages.lowercase || 'Password must contain at least one lowercase letter (a-z).');
-		}
-		if (rules.require_number == 1 && !/[0-9]/.test(password)) {
-			errors.push(messages.number || 'Password must contain at least one number (0-9).');
-		}
-		if (rules.require_special == 1 && !/[!@#$%^&*()]/.test(password)) {
-			errors.push(messages.special_char || 'Password must contain at least one special character (!@#$%^&*()).');
-		}
-		return errors;
-	}
+    // These forms show the user's own data, so a successful save leaves it in place.
+    const KEEP_VALUES_ON_SUCCESS = ['my-account-profile-form'];
 
-	
-    // Email validation helper function
-    function validateEmail(email) {
-        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return re.test(String(email).toLowerCase());
+    // The same rules as clu_validate_password() in PHP; keep the two in step.
+    function passwordErrors(password) {
+        const rules  = config.passwordRules || {};
+        const errors = [];
+
+        if ([...password].length < (parseInt(rules.min_length, 10) || 8)) {
+            errors.push(messages.min_length);
+        }
+        if (rules.require_uppercase == 1 && !/[A-Z]/.test(password)) {
+            errors.push(messages.uppercase);
+        }
+        if (rules.require_lowercase == 1 && !/[a-z]/.test(password)) {
+            errors.push(messages.lowercase);
+        }
+        if (rules.require_number == 1 && !/[0-9]/.test(password)) {
+            errors.push(messages.number);
+        }
+        if (rules.require_special == 1 && !/[^\p{L}\p{N}\s]/u.test(password)) {
+            errors.push(messages.special_char);
+        }
+
+        return errors;
     }
 
-    // Form validation function
-    function validateForm(form) {
-        //console.log(`Validating form: ${form.id}`);
-        let isValid = true;
+    function errorBox(form, input) {
+        return form.querySelector(`.error-message[data-inputid="${input.id}"]`);
+    }
 
-        // Show/hide error helper functions
-        const showError = (input) => {
-            const errorMessage = form.querySelector(`.error-message[data-inputid="${input.id}"]`);
-            if (errorMessage) {
-                errorMessage.style.display = 'block';
-            }
-        };
+    function hideError(form, input) {
+        const box = errorBox(form, input);
 
-        const hideError = (input) => {
-            const errorMessage = form.querySelector(`.error-message[data-inputid="${input.id}"]`);
-            if (errorMessage) {
-                errorMessage.style.display = 'none';
-            }
-        };
+        if (box) {
+            box.style.display = 'none';
+        }
+    }
 
-        const showEmailError = (inputId, errorType) => {
-            const errorMessage = form.querySelector(`.error-message[data-inputid="${inputId}"]`);
-            if (errorMessage) {
-                // Reset both spans first
-                errorMessage.querySelector('.email-empty').style.display = 'none';
-                errorMessage.querySelector('.email-incurrected').style.display = 'none';
+    // Shows the box's own text, or the given lines in its place.
+    function showError(form, input, lines) {
+        const box = errorBox(form, input);
 
-                // Show the specific error type
-                if (errorType === 'empty') {
-                    errorMessage.querySelector('.email-empty').style.display = 'block';
-                } else if (errorType === 'incorrect') {
-                    errorMessage.querySelector('.email-incurrected').style.display = 'block';
-                }
+        if (!box) {
+            return;
+        }
 
-                errorMessage.style.display = 'block'; // Ensure the error message container is visible
-            }
-        };
+        if (box.dataset.requiredText === undefined) {
+            box.dataset.requiredText = box.textContent.trim();
+        }
 
-        const hideEmailError = (inputId) => {
-            const errorMessage = form.querySelector(`.error-message[data-inputid="${inputId}"]`);
-            if (errorMessage) {
-                // Reset both spans and hide the container
-                errorMessage.querySelector('.email-empty').style.display = 'none';
-                errorMessage.querySelector('.email-incurrected').style.display = 'none';
-                errorMessage.style.display = 'none';
-            }
-        };
-
-        // Validate text inputs
-        const textInputs = form.querySelectorAll('input[type="text"][custom-required]');
-        textInputs.forEach((input) => {
-            input.addEventListener('focus', () => hideError(input)); // Hide error on focus
-            if (!input.value.trim()) {
-                isValid = false;
-                showError(input); // Show error if empty
-            }
+        box.textContent = '';
+        (lines || [box.dataset.requiredText]).forEach((line) => {
+            const row = document.createElement('div');
+            row.textContent = line;
+            box.appendChild(row);
         });
+        box.style.display = 'block';
+    }
 
-        // Validate email input
-        const emailInput = form.querySelector('input[type="email"][custom-required]');
-        if (emailInput) {
-            const emailValue = emailInput.value.trim();
+    function showEmailError(form, input, type) {
+        const box = errorBox(form, input);
 
-            emailInput.addEventListener('focus', () => hideEmailError(emailInput.id)); // Hide error on focus
+        if (box) {
+            box.querySelector('.email-empty').style.display   = type === 'empty' ? 'block' : 'none';
+            box.querySelector('.email-invalid').style.display = type === 'invalid' ? 'block' : 'none';
+            box.style.display = 'block';
+        }
+    }
 
-            if (!emailValue) {
-                isValid = false;
-                showEmailError(emailInput.id, 'empty'); // Show empty field error
-            } else if (!validateEmail(emailValue)) {
-                isValid = false;
-                showEmailError(emailInput.id, 'incorrect'); // Show incorrect format error
-            } else {
-                hideEmailError(emailInput.id); // Hide error if valid
+    function validatePasswordField(form, input) {
+        const value = input.value.trim();
+
+        if (!value) {
+            showError(form, input);
+            return false;
+        }
+
+        if (input.hasAttribute('data-strength')) {
+            const errors = passwordErrors(value);
+
+            if (errors.length) {
+                showError(form, input, errors);
+                return false;
             }
         }
-		
-        // Validate password inputs
-        // const passwordInputs = form.querySelectorAll('input[type="password"][custom-required]');
-        // passwordInputs.forEach((input) => {
-            // input.addEventListener('focus', () => hideError(input)); // Hide error on focus
-            // if (!input.value.trim()) {
-                // isValid = false;
-                // showError(input); // Show error if empty
-            // }
-        // });
-		// Inside validateForm function (modify password validation)
-		const passwordInput = form.querySelector('input[type="password"][custom-required]');
-		if (passwordInput) {
-			const passwordValue = passwordInput.value.trim();
-			const errorMessageContainer = form.querySelector(`.error-message[data-inputid="${passwordInput.id}"]`);
 
-			if (form.id === 'loginform') {
-				// Login: only check not empty
-				if (!passwordValue) {
-					isValid = false;
-					if (errorMessageContainer) errorMessageContainer.style.display = 'block';
-				} else {
-					if (errorMessageContainer) errorMessageContainer.style.display = 'none';
-				}
-			} else {
-				// Set/reset password forms: apply strength validation
-				const errors = validatePassword(passwordValue);
-				if (errors.length > 0) {
-					isValid = false;
-					if (errorMessageContainer) {
-						errorMessageContainer.innerHTML = errors.map(error => `<p>${error}</p>`).join('');
-						errorMessageContainer.style.display = 'block';
-					}
-				} else {
-					if (errorMessageContainer) errorMessageContainer.style.display = 'none';
-				}
-			}
-		}
+        if (input.id === 'confirm_password' && value !== form.querySelector('#new_password').value.trim()) {
+            showError(form, input, [messages.mismatch]);
+            return false;
+        }
 
-        // Validate other required fields (e.g., selects, textareas)
-        const requiredFields = form.querySelectorAll('select[custom-required], textarea[custom-required]');
-        requiredFields.forEach((field) => {
-            field.addEventListener('focus', () => hideError(field)); // Hide error on focus
-            if (!field.value.trim()) {
-                isValid = false;
-                showError(field); // Show error if empty
-            }
-        });
+        hideError(form, input);
+        return true;
+    }
 
-		// Validate all required checkboxes
-        const checkboxes = form.querySelectorAll('input[type="checkbox"][custom-required]');
-        checkboxes.forEach((checkbox) => {
-            // Add a 'change' event listener to hide error on interaction
-            checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    hideError(checkbox);
+    function validateForm(form) {
+        let isValid = true;
+
+        form.querySelectorAll('[custom-required]').forEach((input) => {
+            if (input.type === 'password') {
+                isValid = validatePasswordField(form, input) && isValid;
+            } else if (input.type === 'email') {
+                const value = input.value.trim();
+
+                if (value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    hideError(form, input);
+                } else {
+                    showEmailError(form, input, value ? 'invalid' : 'empty');
+                    isValid = false;
                 }
-            });
-
-            const errorMessage = form.querySelector(`.error-message[data-inputid="${checkbox.id}"]`);
-            if (!checkbox.checked) {
+            } else if (input.type === 'checkbox' ? !input.checked : !input.value.trim()) {
+                showError(form, input);
                 isValid = false;
-                if (errorMessage) {
-                    errorMessage.style.display = 'block'; // Show error if not checked
-                }
             } else {
-                if (errorMessage) {
-                    errorMessage.style.display = 'none'; // Hide error if checked
-                }
+                hideError(form, input);
             }
         });
 
         return isValid;
     }
 
-    // Form submission handler
-    forms.forEach((form) => {
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault(); // Prevent default form submission
-            //console.log('Submitting form:', form);
+    function showResponse(output, message, state) {
+        output.innerHTML = message; // Server messages are sanitized and may hold links.
+        output.classList.remove('clu-response--pending', 'clu-response--success', 'clu-response--error');
+        output.classList.add('clu-response--' + state);
+    }
 
-            const isFormValid = validateForm(form);
-            if (isFormValid) {
-                console.log(`Form ${form.id} is valid. Submitting...`);
+    // A cached page or a login in another tab can leave the form with a dead nonce.
+    async function refreshNonce(form) {
+        const field = form.querySelector('input[name$="_nonce"]');
 
-				const submitBtn = form.querySelector('[type="submit"]');
-				if (submitBtn) submitBtn.disabled = true;
+        if (!field) {
+            return false;
+        }
 
-				try {
-					switch (form.id) {
-						case 'loginform':
-							await login_user(form, event);
-							break;
-						case 'passwordlostform':
-							await lost_password(form, event);
-							break;
-						case 'signupform':
-							await signup(form, event);
-							break;
-						case 'setpassform':
-							await set_password(form, event);
-							break;
-						case 'my-account-profile-form':
-							await update_profile(form, event);
-							break;
-						case 'my-account-password-form':
-							await update_password(form, event);
-							break;
-						default:
-							console.error(`Unknown form ID: ${form.id}`);
-					}
-				} finally {
-					if (submitBtn) submitBtn.disabled = false;
-				}
+        const body = new FormData();
+        body.append('action', 'clu_refresh_nonce');
+        body.append('field', field.name);
 
-            } else {
-                console.log(`Form ${form.id} is invalid. Please correct errors.`);
+        try {
+            const response = await fetch(config.ajaxurl, { method: 'POST', body });
+            const result   = await response.json();
+
+            if (result.success && result.data.nonce) {
+                field.value = result.data.nonce;
+                return true;
             }
+        } catch (error) {
+            // Falls through, and the caller shows the original error.
+        }
+
+        return false;
+    }
+
+    async function submitForm(form, output, mayRetry) {
+        let result;
+
+        try {
+            const response = await fetch(config.ajaxurl, { method: 'POST', body: new FormData(form) });
+            result = await response.json();
+        } catch (error) {
+            result = null;
+        }
+
+        const data = (result && result.data) || {};
+
+        if (result && !result.success && data.code === 'invalid_nonce' && mayRetry && await refreshNonce(form)) {
+            return submitForm(form, output, false);
+        }
+
+        if (!result || !data.message) {
+            showResponse(output, messages.network_error, 'error');
+            return;
+        }
+
+        showResponse(output, data.message, result.success ? 'success' : 'error');
+
+        if (result.success) {
+            if (!KEEP_VALUES_ON_SUCCESS.includes(form.id)) {
+                form.reset();
+            }
+            if (data.redirect) {
+                window.location.href = data.redirect;
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.form-validation').forEach((form) => {
+            const output = document.getElementById(RESPONSE_ELEMENTS[form.id]);
+
+            if (!output) {
+                return;
+            }
+
+            // Editing a field clears its error.
+            form.querySelectorAll('[custom-required]').forEach((input) => {
+                input.addEventListener('focus', () => hideError(form, input));
+                input.addEventListener('change', () => hideError(form, input));
+            });
+
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+
+                if (!validateForm(form)) {
+                    return;
+                }
+
+                const button = form.querySelector('[type="submit"]');
+
+                if (button) {
+                    button.disabled = true;
+                }
+                showResponse(output, messages.processing, 'pending');
+
+                try {
+                    await submitForm(form, output, true);
+                } finally {
+                    if (button) {
+                        button.disabled = false;
+                    }
+                }
+            });
         });
     });
-
-});
-
-
-async function signup(form, event) {
-	console.log('function signup');
-    event.preventDefault();
-
-    const formData = new FormData(form);
-	// console.log('formData',formData);
-	
-    const responseElement = document.getElementById('signupform-register-response');
-    // responseElement.textContent = 'Processing...';
-	responseElement.textContent = 'Processing...';
-	responseElement.style.color = 'black';
-	
-	formData.append('nonce', ajaxData.registerNonce);
-
-    try {
-
-		const response = await fetch(ajaxData.ajaxurl, {
-            method: 'POST',
-            body: formData,
-        });
-		// console.log('response:', response);
-
-
-        const result = await response.json();
-		// console.log('Parsed JSON:', result);
-
-		if (result.success) {
-            responseElement.innerHTML = result.data.message;
-            responseElement.style.color = 'green';
-			form.reset(); // Clear the form on success
-            // Redirect to the provided URL
-			console.log('result.data.redirect:', result.data.redirect);
-            if (result.data.redirect) {
-                window.location.href = result.data.redirect;
-            }
-        } else {
-            responseElement.innerHTML = result.data.message;
-            responseElement.style.color = 'red';
-        }
-    } catch (error) {
-        // responseElement.textContent = 'An error occurred. Please try again.';
-		responseElement.textContent = 'An error occurred. Please try again.';
-        responseElement.style.color = 'red';
-    }
-}
-
-
-async function set_password(form, event) {
-	console.log('function set_password');
-    event.preventDefault();
-
-    const formData = new FormData(form);
-    formData.append('action', 'ajax_password_set'); // Add action for PHP handler
-
-    const responseElement = document.getElementById('password-set-response');
-    // responseElement.textContent = 'Processing...';
-	responseElement.textContent = 'Processing...';
-	responseElement.style.color = 'black';
-
-	formData.append('nonce', ajaxData.setPasswordNonce);
-
-	try {
-		const response = await fetch(ajaxData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		});
-
-		const text = await response.text(); // Get the raw response as text
-		//console.log('Raw response:', text);
-
-		const result = JSON.parse(text); // Parse it as JSON
-		//console.log('Parsed JSON:', result);
-
-		if (result.success) {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'green';
-			form.reset(); // Clear the form on success
-			console.log('result.data.redirect:', result.data.redirect);
-            if (result.data.redirect) {
-                window.location.href = result.data.redirect;
-            }
-		} else {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'red';
-		}
-	} catch (error) {
-		console.error('Fetch error:', error);
-		// responseElement.textContent = 'An error occurred. Please try again.';
-		responseElement.textContent = 'An error occurred. Please try again.';
-		responseElement.style.color = 'red';
-	}
-}
-
-
-async function lost_password(form, event) {
-	console.log('function lost_password');
-    event.preventDefault();
-
-    const formData = new FormData(form);
-    formData.append('action', 'ajax_password_lost'); // Add action for PHP handler
-
-    const responseElement = document.getElementById('password-lost-response');
-    // responseElement.textContent = 'Processing...';
-	responseElement.textContent = 'Processing...';
-	responseElement.style.color = 'black';
-
-	formData.append('nonce', ajaxData.lostPasswordNonce);
-
-	try {
-		const response = await fetch(ajaxData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		});
-
-		const text = await response.text(); // Get the raw response as text
-		//console.log('Raw response:', text);
-
-		const result = JSON.parse(text); // Parse it as JSON
-		//console.log('Parsed JSON:', result);
-
-		if (result.success) {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'green';
-			form.reset(); // Clear the form on success
-		} else {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'red';
-		}
-	} catch (error) {
-		console.error('Fetch error:', error);
-		// responseElement.textContent = 'An error occurred. Please try again.';
-		responseElement.textContent = 'An error occurred. Please try again.';		
-		responseElement.style.color = 'red';
-	}
-}
-
-
-async function update_profile(form, event) {
-	console.log('function update_profile');
-	event.preventDefault();
-
-	const formData = new FormData(form);
-	const responseElement = document.getElementById('my-account-profile-response');
-	responseElement.textContent = 'Saving...';
-	responseElement.style.color = 'black';
-
-	try {
-		const response = await fetch(ajaxData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		});
-
-		const result = await response.json();
-
-		if (result.success) {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'green';
-		} else {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'red';
-		}
-	} catch (error) {
-		console.error('Fetch error:', error);
-		responseElement.textContent = 'An error occurred. Please try again.';
-		responseElement.style.color = 'red';
-	}
-}
-
-
-async function update_password(form, event) {
-	console.log('function update_password');
-	event.preventDefault();
-
-	const newPass     = form.querySelector('#new_password').value;
-	const confirmPass = form.querySelector('#confirm_password').value;
-	const responseElement = document.getElementById('my-account-password-response');
-
-	if (newPass !== confirmPass) {
-		responseElement.textContent = 'The new passwords do not match.';
-		responseElement.style.color = 'red';
-		return;
-	}
-
-	const formData = new FormData(form);
-	responseElement.textContent = 'Saving...';
-	responseElement.style.color = 'black';
-
-	try {
-		const response = await fetch(ajaxData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		});
-
-		const result = await response.json();
-
-		if (result.success) {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'green';
-			form.reset();
-		} else {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'red';
-		}
-	} catch (error) {
-		console.error('Fetch error:', error);
-		responseElement.textContent = 'An error occurred. Please try again.';
-		responseElement.style.color = 'red';
-	}
-}
-
-
-async function login_user(form, event) {
-	console.log('function login_user');
-    event.preventDefault();
-
-    const formData = new FormData(form);
-    formData.append('action', 'ajax_login_user'); // Add action for PHP handler
-
-    const responseElement = document.getElementById('login-response');
-    // responseElement.textContent = 'Processing...';
-	responseElement.textContent = 'Processing...';
-	responseElement.style.color = 'black';
-
-	formData.append('login_nonce', ajaxData.setLoginNonce);
-
-	try {
-		
-		const response = await fetch(ajaxData.ajaxurl, {
-			method: 'POST',
-			body: formData,
-		});
-
-		const result = await response.json();
-		console.log('Parsed JSON:', result);
-
-		if (result.success) {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'green';
-			form.reset(); // Clear the form on success
-
-			// Redirect to the provided URL
-			if (result.data.redirect) {
-				console.log('result.data.redirect:', result.data.redirect);
-				window.location.href = result.data.redirect;
-			}
-		} else {
-			responseElement.innerHTML = result.data.message;
-			responseElement.style.color = 'red';
-		}
-
-	} catch (error) {
-		console.log('cc');
-		console.error('Fetch error:', error);
-		// responseElement.textContent = 'An error occurred. Please try again.';
-		responseElement.textContent = 'An error occurred. Please try again.';		
-		responseElement.style.color = 'red';
-	}
-}
-
-
-
+}());

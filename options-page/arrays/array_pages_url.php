@@ -1,46 +1,48 @@
-<?php 
+<?php
+
+defined( 'ABSPATH' ) || exit;
 
 return [
     [
-        'field' => 'url_page_login',
-        'label' => 'Login page url',
+        'field'       => 'url_page_login',
+        'label'       => 'Login page url',
         'placeholder' => '',
-        'default' => ''
+        'default'     => '',
     ],
     [
-        'field' => 'url_page_register',
-        'label' => 'Register page url',
+        'field'       => 'url_page_register',
+        'label'       => 'Register page url',
         'placeholder' => '',
-        'default' => ''
+        'default'     => '',
     ],
     [
-        'field' => 'url_page_password_set',
-        'label' => 'Password set page url',
+        'field'       => 'url_page_password_set',
+        'label'       => 'Password set page url',
         'placeholder' => '',
-        'default' => ''
+        'default'     => '',
     ],
     [
-        'field' => 'url_page_password_lost',
-        'label' => 'Password lost page url',
+        'field'       => 'url_page_password_lost',
+        'label'       => 'Password lost page url',
         'placeholder' => '',
-        'default' => ''
+        'default'     => '',
     ],
     [
-        'field' => 'url_page_redirect_after_login',
-        'label' => 'Redirect url after login',
+        'field'       => 'url_page_redirect_after_login',
+        'label'       => 'Redirect url after login',
         'placeholder' => '',
-        'default' => ''
+        'default'     => '',
     ],
     [
-        'field' => 'url_page_redirect_after_logout',
-        'label' => 'Redirect to page after logout',
+        'field'       => 'url_page_redirect_after_logout',
+        'label'       => 'Redirect to page after logout',
         'placeholder' => '',
-        'default' => ''
+        'default'     => '',
     ],
     [
-        'field' => 'url_page_redirect_after_password_set',
-        'label' => 'Redirect url after password set',
+        'field'       => 'url_page_redirect_after_password_set',
+        'label'       => 'Redirect url after password set',
         'placeholder' => '',
-        'default' => ''
-    ]
+        'default'     => '',
+    ],
 ];

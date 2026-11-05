@@ -1,64 +1,47 @@
-<?php 
+<?php
 
+defined( 'ABSPATH' ) || exit;
 
+add_action( 'wp_ajax_ajax_login_user', 'clu_handle_ajax_login' );
+add_action( 'wp_ajax_nopriv_ajax_login_user', 'clu_handle_ajax_login' );
+function clu_handle_ajax_login() {
+    clu_verify_ajax_nonce( 'login_nonce', 'login_form_nonce' );
 
-add_action('wp_ajax_ajax_login_user', 'handle_ajax_login_user');
-add_action('wp_ajax_nopriv_ajax_login_user', 'handle_ajax_login_user');
-function handle_ajax_login_user() {
-	
-	error_log('function handle_ajax_login_user');
-	
-    // header('Content-Type: application/json');
+    $login    = clu_post_text( 'log' );
+    $password = clu_post_password( 'pwd' );
 
-    // Verify nonce
-    if (!isset($_POST['login_nonce']) || !wp_verify_nonce($_POST['login_nonce'], 'login_form_nonce')) {
-        wp_send_json([
-            'success' => false,
-            // 'data' => ['message' => 'Invalid request.']
-			'data' => ['message' => clu_render_message('invalid_nonce')]
-        ]);
+    if ( $login === '' || $password === '' ) {
+        wp_send_json_error( [ 'message' => clu_render_message( 'login_failed' ) ] );
     }
 
-    // Get login credentials
-    $credentials = [
-        'user_login'    => sanitize_text_field($_POST['log']),
-        'user_password' => sanitize_text_field($_POST['pwd']),
-        'remember'      => true,
-    ];
+    $user = wp_signon(
+        [
+            'user_login'    => $login,
+            'user_password' => $password,
+            'remember'      => ! empty( $_POST['rememberme'] ),
+        ],
+        is_ssl()
+    );
 
-	
-    // Since SSL is not available on localhost, replace is_ssl() with false
-    // $user = wp_signon($credentials, false);
-    $user = wp_signon($credentials, is_ssl());
+    if ( is_wp_error( $user ) ) {
+        // These answer the same, so the form cannot be used to find out who has an
+        // account. Anything else, such as a security plugin's lockout, keeps its text.
+        $credential_errors = [ 'invalid_username', 'invalid_email', 'incorrect_password', 'empty_username', 'empty_password' ];
 
-    $options = get_option('clu_pages_url');
+        $message = in_array( $user->get_error_code(), $credential_errors, true )
+            ? clu_render_message( 'login_failed' )
+            : wp_kses_post( $user->get_error_message() );
 
-    if (is_wp_error($user)) {
-        $error_message = $user->get_error_message();
-        // Replace the default WP lost-password URL with the one from settings
-        if ( !empty($options['url_page_password_lost']) ) {
-            $error_message = preg_replace(
-                '/href=["\'].*?action=lostpassword["\']/',
-                'href="' . esc_url($options['url_page_password_lost']) . '"',
-                $error_message
-            );
-        }
-        wp_send_json([
-            'success' => false,
-            'data' => ['message' => $error_message]
-        ]);
-		exit;
+        wp_send_json_error( [ 'message' => $message ] );
     }
 
-    wp_send_json([
-        'success' => true,
-        'data' => [
-            // 'message' => 'Login successful!',
-			'message' => clu_render_message('login_success'),
-			'redirect' => $options['url_page_redirect_after_login']
-        ]
-    ]);
+    $redirect  = clu_get_page_url( 'url_page_redirect_after_login' );
+    $requested = isset( $_POST['redirect_to'] ) && is_string( $_POST['redirect_to'] )
+        ? wp_validate_redirect( wp_unslash( $_POST['redirect_to'] ), '' )
+        : '';
 
-	exit;
-	
+    wp_send_json_success( [
+        'message'  => clu_render_message( 'login_success' ),
+        'redirect' => $requested !== '' ? $requested : $redirect,
+    ] );
 }

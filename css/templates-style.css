@@ -1,11 +1,22 @@
+.clu-form-wrap {
+    max-width: 430px;
+    margin: 30px auto;
+}
+.clu-form-wrap--wide {
+    max-width: 530px;
+}
+.clu-separator {
+    margin: 40px 0;
+}
+
 .form-clu *[onclick],
 .form-clu *[type="submit"] {
     cursor: pointer;
 }
 .form-clu .error-message {
-	display: none;
-	color: red;
-	font-size: 90%;
+    display: none;
+    color: red;
+    font-size: 90%;
 }
 .form-clu .form-row {
     margin-bottom: 1rem;
@@ -16,28 +27,51 @@
     margin-bottom: 0.2rem;
 }
 
+/* Register form fields */
+#signupform input,
+#signupform textarea,
+#signupform select {
+    display: initial;
+    width: 100%;
+    border: 2px solid #333;
+    padding: 16px;
+    background: #fff;
+}
+
 .error-message {
-	color: #fa1515;
-	font-size: 16px;
+    color: #fa1515;
+    font-size: 16px;
 }
 .error-message p {
     font-size: 16px;
 }
+
+/* Server answers below each form */
+.clu-response--pending {
+    color: #000;
+}
+.clu-response--success {
+    color: green;
+}
+.clu-response--error {
+    color: red;
+}
+
 /* Password requirements list */
+.clu-password-requirements {
+    margin: 0;
+    padding: 0;
+}
 .clu-password-requirements li {
     margin: 6px 0 0 0;
     padding: 2px 5px;
     background: #f8f9fa;
-    border-left: 3px solid #b0b8c1;
+    border-inline-start: 3px solid #b0b8c1;
     border-radius: 3px;
     list-style: none;
     font-size: 0.75rem;
     color: #555;
     line-height: 1.7;
-}
-.clu-password-requirements li::before {
-    /* content: "• ";
-    color: #888; */
 }
 
 /* Required field asterisk */
@@ -52,5 +86,12 @@
     cursor: not-allowed;
 }
 
-/**/
-
+/* Bot trap on the register form: out of sight for people, without display:none, which bots skip */
+.clu-hp {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
