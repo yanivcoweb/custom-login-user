@@ -82,6 +82,29 @@ function clu_block_pending_password_reset( $allow, $user_id ) {
 }
 
 /**
+ * Sends sign-ups from the form built into WordPress through approval too. On a site that
+ * takes registrations that form is always there at wp-login.php?action=register, and it
+ * would create a working account in the default role that no admin hears about.
+ */
+add_action( 'register_new_user', 'clu_send_core_signup_to_approval', 1 );
+function clu_send_core_signup_to_approval( $user_id ) {
+    $user = get_userdata( $user_id );
+
+    if ( ! $user ) {
+        return;
+    }
+
+    // Its emails would tell the user to choose a password, which pending users cannot.
+    remove_action( 'register_new_user', 'wp_send_new_user_notifications' );
+
+    // A pending role set as the site's default role already sent the email on user_register.
+    if ( ! clu_user_is_pending( $user ) ) {
+        $user->set_role( clu_get_registration_role() );
+        clu_send_new_user_email( get_userdata( $user_id ) );
+    }
+}
+
+/**
  * Tells whether the current user is limited to the front end of the site.
  *
  * @return bool

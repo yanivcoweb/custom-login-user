@@ -3,7 +3,7 @@
 A WordPress plugin that adds front-end pages for login, registration, password reset and account details, with an admin approval step for new users.
 
 **Author:** Yaniv Sasson
-**Version:** 1.3.0
+**Version:** 1.4.0
 
 ---
 
@@ -19,7 +19,7 @@ A WordPress plugin that adds front-end pages for login, registration, password r
 - Custom user roles: `Pending User`, `Approved User` and `Rejected User`, all kept out of the WordPress dashboard
 - Protection against spam and abuse: a hidden bot trap and a limit on the registration form, a limit on reset emails, and the same answer for known and unknown accounts on the login and lost-password forms
 
-The plugin adds pages next to the default ones. `wp-login.php` keeps working, and core links to it are not redirected.
+The plugin adds pages next to the default ones, and `wp-login.php` keeps working. To send `wp-login.php` and the links to it to your pages instead, turn on **Replace wp-login.php**.
 
 ---
 
@@ -52,6 +52,39 @@ The login form honours `?redirect_to=` for addresses on the same site.
 Rejecting moves the user to the **Rejected User** role and emails them. They cannot log in or reset a password, and they cannot register again with the same address. The account stays, so a mistake can be undone with **Approve**, which sends the set-password email. To remove someone without an email, such as a bot, use the normal **Delete** link.
 
 Registration follows the WordPress setting **Settings > General > Anyone can register**. When it is off, the form and its AJAX endpoint are both closed.
+
+---
+
+## Replacing wp-login.php
+
+Off by default. Create the pages, try the login page in a private window, then turn it on at the bottom of the **Setup Pages** tab. It needs a published login page of this site.
+
+| On `wp-login.php` | With this on |
+|---|---|
+| The login screen, also from `/wp-admin/` | Your login page, and back to where they were going afterwards |
+| Registration, posted or not | Your register page, or the login page if none is set |
+| Lost password | Your lost-password page, if set |
+| The reset link in emails from WordPress itself, such as **Send password reset** in wp-admin | Your set-password page, if set |
+| After logging out with no address of its own | Your page for after logout, or the login page |
+
+Links from `wp_login_url()`, `wp_registration_url()` and `wp_lostpassword_url()` lead to your pages too.
+
+These keep running on `wp-login.php`: logging out, password-protected posts, the admin email check, data requests, recovery mode, the expired-session popup in wp-admin, and actions of other plugins. A login form of another plugin that posts to `wp-login.php` keeps working, and a failed attempt ends on your login page with the error.
+
+**The way back in.** If the login page ever stops working, the default form is still at:
+
+```
+/wp-login.php?clu_native=1
+```
+
+If a page is deleted or stops being published, that screen goes back to the default form by itself. Recovery mode always uses the default form.
+
+Before turning this on, know that:
+
+- A form that another plugin adds to the default login screen, such as two-factor or CAPTCHA, does not appear on your login page. Those plugins usually check it when the login runs too, which could then fail. Try this on a staging copy first
+- The admin email check that WordPress shows from time to time appears only after a login through the default form
+- `wp-login.php` still accepts login attempts by post, so this does not protect against password guessing
+- It was tested on a single site, not on a multisite network
 
 ---
 
@@ -166,6 +199,21 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.4.0
+
+Before updating a live site
+
+- On a site where anyone can register, sign-ups through the form built into WordPress, at `wp-login.php?action=register`, now wait for approval like all others. WordPress no longer emails those users about a password, since they cannot set one until approved.
+
+Security
+
+- That form was a way around the approval step: it created a working account in the default role, and no admin heard about it.
+
+Added
+
+- **Replace wp-login.php**, off by default: `wp-login.php` and the links to it lead to your pages. See Replacing wp-login.php above.
+- The login page shows an error when a login posted to `wp-login.php` failed and was sent there.
 
 ### 1.3.0
 

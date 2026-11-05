@@ -3,7 +3,7 @@
  * Plugin Name:       Custom Login Users
  * Plugin URI:        https://github.com/yanivcoweb/custom-login-user
  * Description:       Front-end login, registration, password and account pages, with an admin approval step for new users.
- * Version:           1.3.0
+ * Version:           1.4.0
  * Requires at least: 5.0
  * Requires PHP:      7.4
  * Author:            Yaniv Sasson
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'CLU_VERSION', '1.3.0' );
+define( 'CLU_VERSION', '1.4.0' );
 define( 'CLU_PLUGIN_FILE', __FILE__ );
 define( 'CLU_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CLU_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -27,6 +27,7 @@ $clu_includes = [
     'src/approvals.php',
     'src/register-fields.php',
     'src/content-access.php',
+    'src/login-replacement.php',
     'src/user-extra-fields.php',
     'options-page/options-page.php',
     'shortcodes/shortcode-login-form.php',
@@ -42,6 +43,7 @@ $clu_includes = [
     'ajax/ajax-login.php',
     'ajax/ajax-register.php',
     'ajax/ajax-register-fields.php',
+    'ajax/ajax-login-replacement.php',
     'ajax/ajax-create-pages.php',
     'ajax/ajax-roles.php',
     'ajax/ajax-messages.php',

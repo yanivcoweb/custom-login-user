@@ -47,5 +47,5 @@ $text = function ( $key ) {
         </div>
     </form>
 
-    <div id="login-response" class="clu-response" role="status"></div>
+    <div id="login-response" class="clu-response<?php echo $attributes['error'] !== '' ? ' clu-response--error' : ''; ?>" role="status"><?php echo $attributes['error']; // phpcs:ignore WordPress.Security.EscapeOutput ?></div>
 </div>

@@ -295,6 +295,29 @@ jQuery(function ($) {
         });
     });
 
+    /* ── Replacing wp-login.php ───────────────────────────────────────── */
+
+    $('#clu-save-replace-login-btn').on('click', function () {
+        const $result = $('#clu-replace-login-result');
+
+        post($(this), $('#clu-replace-login-spinner'), $result, {
+            action: 'clu_save_login_replacement',
+            nonce: config.loginReplacementNonce,
+            enabled: $('#clu-replace-login').is(':checked') ? 1 : 0,
+        }, function (response) {
+            if (!response.success) {
+                $('#clu-replace-login').prop('checked', false);
+            }
+
+            if (response.success && response.data.warning) {
+                showNotice($result, 'warning', response.data.message);
+                return;
+            }
+
+            reportMessage($result)(response);
+        });
+    });
+
     /* ── Setup pages ──────────────────────────────────────────────────── */
 
     const SETUP_STATUS = {

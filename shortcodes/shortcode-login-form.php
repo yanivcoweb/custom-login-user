@@ -25,6 +25,8 @@ function clu_render_login_form( $attributes ) {
 
     $requested               = isset( $_GET['redirect_to'] ) && is_string( $_GET['redirect_to'] ) ? wp_unslash( $_GET['redirect_to'] ) : '';
     $attributes['redirect']  = wp_validate_redirect( $requested, '' );
+    // Set when a login posted to wp-login.php failed and was sent here.
+    $attributes['error']     = isset( $_GET['clu_login_error'] ) ? clu_render_message( 'login_failed' ) : '';
 
     return clu_get_template_html( 'form_login', $attributes );
 }

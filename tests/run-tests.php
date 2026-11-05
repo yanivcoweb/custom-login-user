@@ -218,7 +218,7 @@ function approved_role() { return clu_get_role_slug( 'approved_role' ); }
 function reset_state() {
     wp_set_current_user( 0 );
     $GLOBALS['clu_mails'] = [];
-    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_pending_count' ] as $o ) {
+    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_pending_count', 'clu_replace_wp_login' ] as $o ) {
         delete_option( $o );
     }
     delete_transient( 'clu_pending_count' );
@@ -1374,7 +1374,192 @@ $types = clu_restrictable_post_types();
 t( 'pages and posts offer the box, media and products do not', in_array( 'page', $types, true ) && in_array( 'post', $types, true ) && ! in_array( 'attachment', $types, true ) && ! in_array( 'product', $types, true ), implode( ',', $types ) );
 
 reset_state();
-section( '22. Nonces, templates, settings, update and uninstall' );
+section( '22. Replacing wp-login.php' );
+
+/** Runs what wp-login.php runs first. Returns the address it was sent to, or stays. */
+function wp_login_request( $get = [], $post = null, $callback = 'clu_replace_wp_login' ) {
+    $_GET     = wp_slash( $get );
+    $_POST    = wp_slash( (array) $post );
+    $_REQUEST = array_merge( $_GET, $_POST );
+    $_SERVER['REQUEST_METHOD'] = $post === null ? 'GET' : 'POST';
+    $result   = 'stays';
+    $catch    = function ( $location ) use ( &$result ) {
+        $result = $location;
+        throw new CLU_Die();
+    };
+    add_filter( 'wp_redirect', $catch );
+    try {
+        $callback( new WP_Error() );
+    } catch ( CLU_Die $e ) {
+        // Redirected.
+    }
+    remove_filter( 'wp_redirect', $catch );
+    $_GET = $_POST = $_REQUEST = [];
+    unset( $_SERVER['REQUEST_METHOD'] );
+    return $result;
+}
+
+$save_replacement = function ( $enabled, $user_id = 1 ) {
+    wp_set_current_user( $user_id );
+    $res = ajax( 'clu_save_login_replacement', [ 'nonce' => wp_create_nonce( 'clu_login_replacement_nonce' ), 'enabled' => $enabled ], $user_id );
+    wp_set_current_user( 0 );
+    return $res;
+};
+
+$p_login    = make_page( 'R login', '[clu_login_form]', false );
+$p_register = make_page( 'R register', '[clu_register_form]', false );
+$p_lost     = make_page( 'R lost', '[clu_password_lost_form]', false );
+$p_set      = make_page( 'R set', '[clu_password_set_form]', false );
+$p_out      = make_page( 'R out', 'Bye', false );
+$u_login    = get_permalink( $p_login );
+$u_register = get_permalink( $p_register );
+$u_lost     = get_permalink( $p_lost );
+$u_set      = get_permalink( $p_set );
+$all_pages  = [ 'url_page_login' => $u_login, 'url_page_register' => $u_register, 'url_page_password_lost' => $u_lost, 'url_page_password_set' => $u_set ];
+
+t( 'it is off by default', ! clu_login_replacement_is_on() );
+update_option( 'clu_pages_url', $all_pages );
+t( '...even with the pages set', ! clu_login_replacement_is_on() && wp_login_request() === 'stays' && strpos( wp_login_url(), 'wp-login.php' ) !== false );
+
+delete_option( 'clu_pages_url' );
+$res = $save_replacement( 1 );
+t( 'it cannot be turned on without a login page', empty( $res['success'] ) && ! clu_login_replacement_is_on(), msg( $res ) );
+update_option( 'clu_pages_url', [ 'url_page_login' => site_url( 'wp-login.php' ) ] );
+$res = $save_replacement( 1 );
+t( '...nor with wp-login.php itself as that page', empty( $res['success'] ), msg( $res ) );
+update_option( 'clu_pages_url', [ 'url_page_login' => home_url( '/no-such-page-at-all/' ) ] );
+$res = $save_replacement( 1 );
+t( '...nor with a page that does not exist', empty( $res['success'] ), msg( $res ) );
+$p_draft = make_page( 'R draft', '[clu_login_form]', false, [ 'post_status' => 'draft' ] );
+update_option( 'clu_pages_url', [ 'url_page_login' => home_url( '/?page_id=' . $p_draft ) ] );
+$res = $save_replacement( 1 );
+t( '...nor with a draft', empty( $res['success'] ), msg( $res ) );
+update_option( 'clu_pages_url', $all_pages );
+$res = $save_replacement( 1, $subs );
+t( 'a subscriber cannot turn it on', empty( $res['success'] ) && get_option( 'clu_replace_wp_login' ) !== '1', msg( $res ) );
+$res = ajax( 'clu_save_login_replacement', [ 'nonce' => 'x', 'enabled' => 1 ] );
+t( 'nor a visitor', empty( $res['success'] ) && get_option( 'clu_replace_wp_login' ) !== '1' );
+$p_plain = make_page( 'R plain', 'No shortcode', false );
+update_option( 'clu_pages_url', [ 'url_page_login' => get_permalink( $p_plain ) ] );
+$res = $save_replacement( 1 );
+t( 'a page without the shortcode gets a warning, since a page builder may hold the form', ! empty( $res['success'] ) && ! empty( $res['data']['warning'] ), msg( $res ) );
+update_option( 'clu_pages_url', $all_pages );
+$res = $save_replacement( 1 );
+t( 'an administrator turns it on', ! empty( $res['success'] ) && empty( $res['data']['warning'] ) && clu_login_replacement_is_on(), msg( $res ) );
+
+t( 'the login screen goes to the login page', wp_login_request() === $u_login, wp_login_request() );
+$target = wp_login_request( [ 'redirect_to' => home_url( '/wp-admin/' ) ] );
+t( '...and leads back afterwards', strpos( $target, $u_login ) === 0 && ( query_of( $target )['redirect_to'] ?? '' ) === home_url( '/wp-admin/' ), $target );
+$before = did_action( 'clear_auth_cookie' );
+$target = wp_login_request( [ 'redirect_to' => home_url( '/wp-admin/' ), 'reauth' => '1' ] );
+t( 'a re-login from wp-admin clears the old cookies, or the user could never get back in', did_action( 'clear_auth_cookie' ) === $before + 1 && strpos( $target, $u_login ) === 0 && strpos( $target, 'reauth' ) === false, $target );
+t( 'a normal visit does not clear them', ( wp_login_request() && did_action( 'clear_auth_cookie' ) === $before + 1 ) );
+t( 'a post from another login form stays', wp_login_request( [], [ 'log' => 'a', 'pwd' => 'b' ] ) === 'stays' );
+t( 'the expired-session popup stays', wp_login_request( [ 'interim-login' => '1' ] ) === 'stays' );
+t( 'the way back in stays', wp_login_request( [ 'clu_native' => '1' ] ) === 'stays' );
+t( '...also through a post', wp_login_request( [], [ 'clu_native' => '1', 'log' => 'a', 'pwd' => 'b' ] ) === 'stays' );
+t( 'a second-level action of WordPress goes to the login page', wp_login_request( [ 'checkemail' => 'confirm' ] ) === $u_login );
+t( 'an unknown action counts as logging in', wp_login_request( [ 'action' => 'whatever' ] ) === $u_login );
+t( 'an array as the action does not crash', wp_login_request( [ 'action' => [ 'x' ] ] ) === $u_login );
+foreach ( [ 'logout', 'postpass', 'confirm_admin_email', 'confirmaction', 'entered_recovery_mode' ] as $action ) {
+    t( "the $action action keeps running", wp_login_request( [ 'action' => $action ] ) === 'stays' );
+}
+add_action( 'login_form_clu_custom', '__return_null' );
+t( 'an action of another plugin keeps running', wp_login_request( [ 'action' => 'clu_custom' ] ) === 'stays' );
+remove_action( 'login_form_clu_custom', '__return_null' );
+
+t( 'the register screen goes to the register page', wp_login_request( [ 'action' => 'register' ] ) === $u_register );
+$res = wp_login_request( [ 'action' => 'register' ], [ 'user_login' => 'clu_bypass', 'user_email' => 'clu-bypass2@example.test' ] );
+t( '...a post too, so no user is created there', $res === $u_register && ! get_user_by( 'login', 'clu_bypass' ), $res );
+t( 'the lost-password screen goes to its page', wp_login_request( [ 'action' => 'lostpassword' ] ) === $u_lost && wp_login_request( [ 'action' => 'retrievepassword' ], [ 'user_login' => 'a' ] ) === $u_lost );
+$target = wp_login_request( [ 'action' => 'rp', 'key' => 'abc123', 'login' => 'a+b c' ] );
+t( 'a reset link from a WordPress email goes to the set-password page', strpos( $target, $u_set ) === 0 && ( query_of( $target )['key'] ?? '' ) === 'abc123' && ( query_of( $target )['login'] ?? '' ) === 'a+b c', $target );
+$target = wp_login_request( [ 'key' => 'abc123', 'login' => 'x' ] );
+t( '...also with no action in it', strpos( $target, $u_set ) === 0, $target );
+t( 'a reset screen with no key goes to the lost-password page', wp_login_request( [ 'action' => 'rp' ] ) === $u_lost && wp_login_request( [ 'action' => 'resetpass' ], [ 'pass1' => 'x' ] ) === $u_lost );
+
+update_option( 'clu_pages_url', [ 'url_page_login' => $u_login ] );
+t( 'without a register page, that screen still does not stay', wp_login_request( [ 'action' => 'register' ] ) === $u_login );
+t( 'without a lost-password page, the default one stays', wp_login_request( [ 'action' => 'lostpassword' ] ) === 'stays' );
+t( 'without a set-password page, a reset link stays', wp_login_request( [ 'action' => 'rp', 'key' => 'a', 'login' => 'b' ] ) === 'stays' );
+update_option( 'clu_pages_url', $all_pages );
+
+wp_trash_post( $p_login );
+t( 'if the login page is deleted, the default form comes back', ! clu_login_replacement_is_on() && wp_login_request() === 'stays' && strpos( wp_login_url(), 'wp-login.php' ) !== false );
+wp_untrash_post( $p_login );
+wp_publish_post( $p_login );
+t( '...and the replacement returns with the page', clu_login_replacement_is_on() );
+wp_trash_post( $p_set );
+t( 'if only another page is deleted, its screen falls back', wp_login_request( [ 'action' => 'rp', 'key' => 'a', 'login' => 'b' ] ) === $u_lost );
+wp_untrash_post( $p_set );
+wp_publish_post( $p_set );
+
+t( 'links to the login screen lead to the page', wp_login_url() === $u_login, wp_login_url() );
+$url = wp_login_url( home_url( '/x/' ) );
+t( '...and lead back', ( query_of( $url )['redirect_to'] ?? '' ) === home_url( '/x/' ), $url );
+t( 'a re-login link still passes through wp-login.php', strpos( wp_login_url( home_url( '/wp-admin/' ), true ), 'wp-login.php' ) !== false );
+t( 'links to the other screens lead to their pages', wp_registration_url() === $u_register && wp_lostpassword_url() === $u_lost, wp_registration_url() . ' ' . wp_lostpassword_url() );
+class CLU_Admin_Screen { public function in_admin() { return true; } }
+$GLOBALS['current_screen'] = new CLU_Admin_Screen();
+t( 'in wp-admin the link stays, for the expired-session popup', strpos( wp_login_url(), 'wp-login.php' ) !== false );
+unset( $GLOBALS['current_screen'] );
+$old_pagenow = $GLOBALS['pagenow'] ?? '';
+$GLOBALS['pagenow'] = 'wp-login.php';
+t( 'inside wp-login.php the link stays, for its next step after a login', strpos( wp_login_url( home_url( '/z/' ) ), 'wp-login.php' ) !== false );
+$GLOBALS['pagenow'] = $old_pagenow;
+
+$logout = function ( $requested ) { return apply_filters( 'logout_redirect', 'wp-login.php?loggedout=true', $requested, wp_get_current_user() ); };
+t( 'after a logout, the login page', $logout( '' ) === $u_login, $logout( '' ) );
+update_option( 'clu_pages_url', $all_pages + [ 'url_page_redirect_after_logout' => get_permalink( $p_out ) ] );
+t( '...or the page set for that', $logout( '' ) === get_permalink( $p_out ), $logout( '' ) );
+t( 'an address asked for stays', $logout( home_url( '/asked/' ) ) === 'wp-login.php?loggedout=true' );
+update_option( 'clu_pages_url', $all_pages );
+
+$target = wp_login_request( [], [ 'log' => 'a', 'pwd' => 'b', 'redirect_to' => home_url( '/y/' ) ], 'clu_send_failed_login_to_page' );
+t( 'a failed post from another form ends on the login page, with the error', strpos( $target, $u_login ) === 0 && ( query_of( $target )['clu_login_error'] ?? '' ) === '1' && ( query_of( $target )['redirect_to'] ?? '' ) === home_url( '/y/' ), $target );
+t( '...but not on the default form', wp_login_request( [], [ 'clu_native' => '1', 'log' => 'a' ], 'clu_send_failed_login_to_page' ) === 'stays' );
+t( '...nor in the expired-session popup', wp_login_request( [], [ 'interim-login' => '1', 'log' => 'a' ], 'clu_send_failed_login_to_page' ) === 'stays' );
+$html = render_shortcode_safe( $SC_LOGIN, [ 'clu_login_error' => '1' ] );
+t( 'the login page shows that error', strpos( $html, 'clu-response--error' ) !== false && strpos( $html, clu_get_message( 'login_failed' ) ) !== false );
+$html = render_shortcode_safe( $SC_LOGIN );
+t( '...and no error otherwise', strpos( $html, 'clu-response--error' ) === false );
+$_REQUEST = [ 'clu_native' => '1' ];
+ob_start();
+clu_keep_native_login();
+$field = ob_get_clean();
+$_REQUEST = [];
+t( 'the default form keeps its place through a post', strpos( $field, 'name="clu_native"' ) !== false );
+
+$res = $save_replacement( 0 );
+t( 'turning it off brings wp-login.php back', ! empty( $res['success'] ) && ! clu_login_replacement_is_on() && wp_login_request() === 'stays' && strpos( wp_login_url(), 'wp-login.php' ) !== false, msg( $res ) );
+foreach ( [ $p_login, $p_register, $p_lost, $p_set, $p_out, $p_draft, $p_plain ] as $id ) {
+    wp_delete_post( $id, true );
+}
+
+reset_state();
+section( '23. The registration form built into WordPress' );
+$GLOBALS['clu_mails'] = [];
+$core_id = register_new_user( 'clu_core_signup', 'clu-core-signup@example.test' );
+$core    = is_wp_error( $core_id ) ? null : get_userdata( $core_id );
+t( 'a sign-up there waits for approval too', $core && clu_user_is_pending( $core ), $core ? implode( ',', $core->roles ) : 'no user' );
+t( 'the admin hears about it from the plugin', count( mails_to( get_option( 'admin_email' ) ) ) === 1 && strpos( mails_to( get_option( 'admin_email' ) )[0]['message'], 'clu-core-signup@example.test' ) !== false, print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+t( 'the user gets no email about a password', ! mails_to( 'clu-core-signup@example.test' ) );
+wp_set_password( 'Str0ng!Passw0rd', $core_id );
+t( 'and cannot log in until approved', is_wp_error( wp_authenticate( 'clu_core_signup', 'Str0ng!Passw0rd' ) ) );
+add_action( 'register_new_user', 'wp_send_new_user_notifications' );
+$old_default = get_option( 'default_role' );
+update_option( 'default_role', pending_role() );
+$GLOBALS['clu_mails'] = [];
+$core_id = register_new_user( 'clu_core_signup2', 'clu-core-signup2@example.test' );
+t( 'a pending default role does not email the admin twice', count( mails_to( get_option( 'admin_email' ) ) ) === 1, (string) count( mails_to( get_option( 'admin_email' ) ) ) );
+update_option( 'default_role', $old_default );
+add_action( 'register_new_user', 'wp_send_new_user_notifications' );
+$GLOBALS['clu_mails'] = [];
+$created = wp_insert_user( [ 'user_login' => 'clu_by_admin', 'user_email' => 'clu-by-admin@example.test', 'user_pass' => 'Start1!pass', 'role' => 'subscriber' ] );
+t( 'a user created by an admin is not touched', in_array( 'subscriber', get_userdata( $created )->roles, true ) && ! $GLOBALS['clu_mails'] );
+
+reset_state();
+section( '24. Nonces, templates, settings, update and uninstall' );
 {
     $res = ajax( 'clu_refresh_nonce', [ 'field' => 'login_nonce' ] );
     wp_set_current_user( 0 );
@@ -1483,6 +1668,7 @@ section( '22. Nonces, templates, settings, update and uninstall' );
     $marker_id = make_user( 'clu_uninst', 'clu-uninst@example.test', 'Start1!pass', 'subscriber' );
     update_user_meta( $marker_id, 'clu_approval_link', 1 );
     update_option( 'clu_mail', [ 'from_name' => 'x' ] );
+    update_option( 'clu_replace_wp_login', '1' );
     foreach ( [ 'pending_user', 'approved_user', 'rejected_user' ] as $r ) {
         foreach ( get_users( [ 'role' => $r, 'fields' => 'ID' ] ) as $uid ) {
             get_userdata( $uid )->set_role( 'subscriber' );
@@ -1495,11 +1681,12 @@ section( '22. Nonces, templates, settings, update and uninstall' );
     t( 'uninstall removes the settings', get_option( 'clu_mail', 'gone' ) === 'gone' && get_option( 'clu_db_version', 'gone' ) === 'gone' );
     t( 'uninstall removes the unused roles', ! get_role( 'pending_user' ) && ! get_role( 'approved_user' ) && ! get_role( 'rejected_user' ) );
     t( 'uninstall removes the field list', get_option( 'clu_register_fields', 'gone' ) === 'gone' );
+    t( 'uninstall removes the replacement setting', get_option( 'clu_replace_wp_login', 'gone' ) === 'gone' );
     t( 'uninstall removes the flag on users', ! get_user_meta( $marker_id, 'clu_approval_link', true ) );
     t( 'uninstall removes the flag on pages', get_post_meta( $marker_page, '_clu_restricted', true ) === '' );
 }
 
-section( '23. PHP warnings raised from inside the plugin during all of the above' );
+section( '25. PHP warnings raised from inside the plugin during all of the above' );
 $warnings = array_values( array_unique( $GLOBALS['clu_php_warnings'] ) );
 t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", array_slice( $warnings, 0, 12 ) ) );
 

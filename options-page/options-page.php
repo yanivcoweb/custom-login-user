@@ -34,6 +34,7 @@ function clu_enqueue_admin_assets( $hook ) {
         'rolesNonce'         => wp_create_nonce( 'clu_roles_nonce' ),
         'createPagesNonce'   => wp_create_nonce( 'clu_create_pages_nonce' ),
         'registerFieldsNonce' => wp_create_nonce( 'clu_register_fields_nonce' ),
+        'loginReplacementNonce' => wp_create_nonce( 'clu_login_replacement_nonce' ),
     ] );
 }
 
@@ -723,5 +724,22 @@ function clu_render_setup_pages_tab() {
         <span id="clu-create-pages-spinner" class="spinner"></span>
     </p>
     <div id="clu-create-pages-result"></div>
+
+    <hr style="margin:24px 0;">
+
+    <h2>Replace wp-login.php</h2>
+    <p>
+        <label>
+            <input type="checkbox" id="clu-replace-login" <?php checked( get_option( 'clu_replace_wp_login' ), '1' ); ?>>
+            Send wp-login.php and the links to it to the pages above
+        </label>
+    </p>
+    <p class="description">Logging out, password-protected posts and the expired-session popup in wp-admin keep using wp-login.php. A form on another plugin's login screen, such as for two-factor or CAPTCHA, will not appear on your login page.</p>
+    <p class="description"><strong>Before turning this on,</strong> try your login page in a private window. If it ever stops working, the default form is still at <code><?php echo esc_html( site_url( 'wp-login.php?clu_native=1' ) ); ?></code>.</p>
+    <p>
+        <button type="button" id="clu-save-replace-login-btn" class="button">Save</button>
+        <span id="clu-replace-login-spinner" class="spinner"></span>
+    </p>
+    <div id="clu-replace-login-result"></div>
     <?php
 }
