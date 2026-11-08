@@ -14,6 +14,10 @@
     display: block;
     width: 300px;
 }
+.clu-custom-settings .form-table label.clu-checkbox-label {
+    width: auto;
+    max-width: 40em;
+}
 .clu-custom-settings .form-table input[type="text"] {
     display: block;
     width: 100%;

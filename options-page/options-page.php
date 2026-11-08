@@ -214,6 +214,8 @@ function clu_register_settings() {
 
                         if ( $type === 'email' ) {
                             $clean[ $key ] = sanitize_email( $value );
+                        } elseif ( $type === 'checkbox' ) {
+                            $clean[ $key ] = empty( $value ) ? '' : '1';
                         } else {
                             $clean[ $key ] = sanitize_text_field( $value );
                         }
@@ -240,8 +242,19 @@ function clu_register_settings() {
                     $options = is_array( $options ) ? $options : [];
                     $value   = $options[ $args['label_for'] ] ?? $args['default'];
                     $type    = $args['type'] ?? 'text';
+                    $name    = $tab['option_name'] . '[' . $args['label_for'] . ']';
 
-                    echo "<input type='" . esc_attr( $type ) . "' id='" . esc_attr( $args['label_for'] ) . "' name='" . esc_attr( $tab['option_name'] . '[' . $args['label_for'] . ']' ) . "' value='" . esc_attr( $value ) . "' placeholder='" . esc_attr( $args['placeholder'] ) . "' class='regular-text' />";
+                    if ( $type === 'checkbox' ) {
+                        printf(
+                            '<label class="clu-checkbox-label"><input type="checkbox" id="%s" name="%s" value="1" %s> %s</label>',
+                            esc_attr( $args['label_for'] ),
+                            esc_attr( $name ),
+                            checked( $value, '1', false ),
+                            esc_html( $args['checkbox_label'] )
+                        );
+                    } else {
+                        echo "<input type='" . esc_attr( $type ) . "' id='" . esc_attr( $args['label_for'] ) . "' name='" . esc_attr( $name ) . "' value='" . esc_attr( $value ) . "' placeholder='" . esc_attr( $args['placeholder'] ) . "' class='regular-text' />";
+                    }
 
                     if ( ! empty( $args['description'] ) ) {
                         echo '<p class="description">' . wp_kses_post( $args['description'] ) . '</p>';
@@ -250,11 +263,12 @@ function clu_register_settings() {
                 $tab['settings_group'],
                 $tab['section_id'],
                 [
-                    'label_for'   => $field['field'],
-                    'placeholder' => $field['placeholder'],
-                    'default'     => $field['default'],
-                    'type'        => $field['type'] ?? 'text',
-                    'description' => $field['description'] ?? '',
+                    'label_for'      => $field['field'],
+                    'placeholder'    => $field['placeholder'] ?? '',
+                    'default'        => $field['default'],
+                    'type'           => $field['type'] ?? 'text',
+                    'description'    => $field['description'] ?? '',
+                    'checkbox_label' => $field['checkbox_label'] ?? '',
                 ]
             );
         }
@@ -463,10 +477,13 @@ function clu_render_messages_tab() {
             'login_failed'                => 'Login: wrong details',
             'account_pending'             => 'Account awaiting approval',
             'account_rejected'            => 'Account rejected',
+            'account_unconfirmed'         => 'Account whose email address is not confirmed yet',
             'register_required_fields'    => 'Register: required fields missing',
             'register_invalid_field'      => 'Register and My Account: a value is not valid (<code>{field}</code> = its label)',
             'email_already_registered'    => 'Register: email already registered',
             'register_success'            => 'Register: success',
+            'register_confirm_sent'       => 'Register: success, when the email address must be confirmed first',
+            'confirm_email_send_failed'   => 'Register: the confirmation email could not be sent',
             'email_required'              => 'Password lost: email required',
             'reset_email_send_failed'     => 'Password lost: email send failed',
             'reset_email_sent'            => 'Password lost: request received',
@@ -494,6 +511,9 @@ function clu_render_messages_tab() {
             'registration_disabled'   => 'Register form: registration disabled',
             'invalid_reset_link_page' => 'Set password page: invalid link',
             'expired_reset_link_page' => 'Set password page: expired link',
+            'email_confirmed'         => 'Email confirmation link: confirmed',
+            'email_already_confirmed' => 'Email confirmation link: used before',
+            'email_confirm_invalid'   => 'Email confirmation link: invalid or expired',
             'logout_button_text'      => 'Auth buttons: logout text',
             'login_button_text'       => 'Auth buttons: login text',
             'register_button_text'    => 'Auth buttons: register text',
@@ -504,6 +524,11 @@ function clu_render_messages_tab() {
             'email_link_text'       => 'Text of the link in password emails',
             'email_edit_user_text'  => 'Text of the {edit_user_link} link in the email to the admin',
             'email_pending_list_text' => 'Text of the {pending_users_link} link in the email to the admin',
+            'email_confirm_link_text' => 'Text of the {confirm_link} link in the confirmation email',
+            'confirm_email_subject'   => 'Confirm email address email to user — subject (<code>%s</code> = name)',
+            'confirm_email_body'      => 'Confirm email address email to user — body (<code>{display_name}</code> = name, <code>{confirm_link}</code> = link, <code>{confirm_url}</code> = its URL)',
+            'notify_received_subject' => 'Registration received email to user — subject (<code>%s</code> = name)',
+            'notify_received_body'    => 'Registration received email to user — body (<code>{display_name}</code> = name)',
             'reset_email_subject'   => 'Password reset email — subject',
             'reset_email_body'      => 'Password reset email — body (<code>{display_name}</code> = name, <code>{reset_url}</code> = reset URL, <code>{reset_link}</code> = link)',
             'notify_client_subject' => 'New registration email to admin — subject (<code>%s</code> = name)',
@@ -515,7 +540,7 @@ function clu_render_messages_tab() {
         ],
     ];
 
-    $editor_keys = [ 'already_logged_in', 'reset_email_body', 'notify_client_body', 'notify_user_body', 'notify_rejected_body' ];
+    $editor_keys = [ 'already_logged_in', 'reset_email_body', 'confirm_email_body', 'notify_received_body', 'notify_client_body', 'notify_user_body', 'notify_rejected_body' ];
     ?>
     <h2>Plugin Messages</h2>
     <p>Edit the text shown to users. Leave a field blank to use the built-in default.</p>
@@ -576,7 +601,7 @@ function clu_render_roles_tab() {
     $assignable = array_filter(
         $all_roles,
         function ( $slug ) {
-            return ! clu_role_is_privileged( $slug ) && $slug !== clu_get_role_slug( 'rejected_role' );
+            return ! clu_role_is_privileged( $slug ) && ! clu_role_is_reserved( $slug );
         },
         ARRAY_FILTER_USE_KEY
     );
@@ -613,6 +638,7 @@ function clu_render_roles_tab() {
         </tr>
     </table>
     <p class="description">Rejecting a user from the <strong>Users</strong> list moves them to the Rejected User role and sends them an email. They cannot log in, and you can still approve them later, or delete them.</p>
+    <p class="description">When new users confirm their email address first (on the <strong>Mail</strong> tab), they have the Unconfirmed User role until they do. You can approve one directly, or delete the accounts nobody confirmed.</p>
 
     <p>
         <button type="button" id="clu-save-roles-btn" class="button button-primary">Save Role Assignments</button>
@@ -657,9 +683,9 @@ function clu_render_roles_tab() {
                 <select id="clu-delete-role-select">
                     <option value="">— Select a role —</option>
                     <?php
-                    $protected = [ 'administrator', 'editor', 'author', 'contributor', 'subscriber', clu_get_role_slug( 'rejected_role' ) ];
+                    $protected = [ 'administrator', 'editor', 'author', 'contributor', 'subscriber' ];
                     foreach ( $all_roles as $slug => $role ) :
-                        if ( in_array( $slug, $protected, true ) ) {
+                        if ( in_array( $slug, $protected, true ) || clu_role_is_reserved( $slug ) ) {
                             continue;
                         }
                         ?>

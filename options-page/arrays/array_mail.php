@@ -27,4 +27,20 @@ return [
         'type'        => 'text',
         'description' => 'Separate several addresses with commas. Left empty, the site admin email is used.',
     ],
+    [
+        'field'          => 'confirm_email',
+        'label'          => 'Confirm the email address',
+        'checkbox_label' => 'New users confirm their address through an emailed link, and only then does their registration reach you',
+        'default'        => '',
+        'type'           => 'checkbox',
+        'description'    => 'Made-up and mistyped addresses never reach you. Until the link is clicked the account has the Unconfirmed User role and cannot log in. Registering again with the same address sends a new link. Accounts made before this was turned on are not affected.',
+    ],
+    [
+        'field'          => 'notify_received',
+        'label'          => 'Registration received email',
+        'checkbox_label' => 'Tell new users by email that their registration was received and waits for approval',
+        'default'        => '',
+        'type'           => 'checkbox',
+        'description'    => 'With the address confirmation on, this email goes out once the address is confirmed.',
+    ],
 ];

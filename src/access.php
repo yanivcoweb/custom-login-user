@@ -46,6 +46,25 @@ function clu_user_is_rejected( $user ) {
 }
 
 /**
+ * Tells whether a user has not confirmed their email address yet. Until then the
+ * registration has not reached the admin.
+ *
+ * @param mixed $user WP_User, or anything else, which never counts as unconfirmed.
+ * @return bool
+ */
+function clu_user_is_unconfirmed( $user ) {
+    if ( ! $user instanceof WP_User || ! $user->exists() ) {
+        return false;
+    }
+
+    $roles = (array) $user->roles;
+
+    return in_array( clu_get_role_slug( 'unconfirmed_role' ), $roles, true )
+        && ! in_array( clu_get_role_slug( 'approved_role' ), $roles, true )
+        && ! user_can( $user, 'manage_options' );
+}
+
+/**
  * Returns the message for an account that may not log in or reset its password.
  *
  * @param mixed $user
@@ -56,11 +75,16 @@ function clu_blocked_account_message( $user ) {
         return 'account_rejected';
     }
 
+    if ( clu_user_is_unconfirmed( $user ) ) {
+        return 'account_unconfirmed';
+    }
+
     return clu_user_is_pending( $user ) ? 'account_pending' : '';
 }
 
 /**
- * Stops a pending or rejected user from logging in, through any login form on the site.
+ * Stops a pending, unconfirmed or rejected user from logging in, through any login form
+ * on the site.
  *
  * Runs late, so the account's status is only revealed to someone who already
  * passed the password check.
@@ -73,8 +97,8 @@ function clu_block_pending_login( $user ) {
 }
 
 /**
- * Stops a pending or rejected user from getting a reset key, which would also be a way
- * to log in without approval.
+ * Stops a pending, unconfirmed or rejected user from getting a reset key, which would
+ * also be a way to log in without approval.
  */
 add_filter( 'allow_password_reset', 'clu_block_pending_password_reset', 10, 2 );
 function clu_block_pending_password_reset( $allow, $user_id ) {
@@ -97,11 +121,18 @@ function clu_send_core_signup_to_approval( $user_id ) {
     // Its emails would tell the user to choose a password, which pending users cannot.
     remove_action( 'register_new_user', 'wp_send_new_user_notifications' );
 
-    // A pending role set as the site's default role already sent the email on user_register.
-    if ( ! clu_user_is_pending( $user ) ) {
-        $user->set_role( clu_get_registration_role() );
-        clu_send_new_user_email( get_userdata( $user_id ) );
+    // A pending role set as the site's default role was already dealt with on user_register.
+    if ( clu_user_is_pending( $user ) || clu_user_is_unconfirmed( $user ) ) {
+        return;
     }
+
+    if ( clu_email_confirmation_is_on() ) {
+        clu_ask_to_confirm_email( $user );
+        return;
+    }
+
+    $user->set_role( clu_get_registration_role() );
+    clu_send_registration_emails( get_userdata( $user_id ) );
 }
 
 /**
@@ -117,7 +148,7 @@ function clu_current_user_is_front_end_only() {
     }
 
     return (bool) array_intersect(
-        [ clu_get_role_slug( 'pending_role' ), clu_get_role_slug( 'approved_role' ), clu_get_role_slug( 'rejected_role' ) ],
+        [ clu_get_role_slug( 'pending_role' ), clu_get_role_slug( 'approved_role' ), clu_get_role_slug( 'rejected_role' ), clu_get_role_slug( 'unconfirmed_role' ) ],
         (array) $user->roles
     );
 }

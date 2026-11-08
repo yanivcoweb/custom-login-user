@@ -26,8 +26,8 @@ function clu_render_password_set_form( $attributes ) {
 
         if ( is_wp_error( $user ) ) {
             $attributes['error'] = clu_render_message( 'expired_reset_link_page' );
-        } elseif ( clu_user_is_pending( $user ) ) {
-            $attributes['error'] = clu_render_message( 'account_pending' );
+        } elseif ( clu_blocked_account_message( $user ) !== '' ) {
+            $attributes['error'] = clu_render_message( clu_blocked_account_message( $user ) );
         }
     }
 

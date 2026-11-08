@@ -1559,7 +1559,274 @@ $created = wp_insert_user( [ 'user_login' => 'clu_by_admin', 'user_email' => 'cl
 t( 'a user created by an admin is not touched', in_array( 'subscriber', get_userdata( $created )->roles, true ) && ! $GLOBALS['clu_mails'] );
 
 reset_state();
-section( '24. Nonces, templates, settings, update and uninstall' );
+section( '24. Emails to new users and confirming the address' );
+
+function forget_rate_limits() {
+    global $wpdb;
+    $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_transient\_%clu\_rl\_%' OR option_name LIKE '\_transient\_timeout\_%clu\_rl\_%'" );
+    wp_cache_flush();
+}
+
+/** Opens a link from a confirmation email. Returns the address it led to, or "page: " and the text of the page it showed. */
+function open_confirm_link( $url ) {
+    $_GET     = wp_slash( args_from_link( $url ) );
+    $_REQUEST = $_GET;
+    $result   = 'stays';
+    $redirect = function ( $location ) use ( &$result ) {
+        $result = $location;
+        throw new CLU_Die();
+    };
+    $page     = function () use ( &$result ) {
+        return function ( $message ) use ( &$result ) {
+            $result = 'page: ' . trim( wp_strip_all_tags( $message ) );
+            throw new CLU_Die();
+        };
+    };
+    add_filter( 'wp_redirect', $redirect );
+    add_filter( 'wp_die_ajax_handler', $page, 99 );
+    try {
+        clu_handle_email_confirmation_link();
+    } catch ( CLU_Die $e ) {
+        // Done.
+    }
+    remove_filter( 'wp_redirect', $redirect );
+    remove_filter( 'wp_die_ajax_handler', $page, 99 );
+    $_GET = $_REQUEST = [];
+    return $result;
+}
+
+function confirm_link_of( $email ) {
+    $mails = mails_to( $email );
+    return $mails ? link_from_mail( end( $mails ) ) : null;
+}
+
+{
+    $admin   = get_option( 'admin_email' );
+    $p_reg   = make_page( 'C register', '[clu_register_form]', false );
+    $p_login = make_page( 'C login', '[clu_login_form]', false );
+    $u_reg   = get_permalink( $p_reg );
+    $u_login = get_permalink( $p_login );
+    update_option( 'clu_pages_url', [ 'url_page_register' => $u_reg, 'url_page_login' => $u_login ] );
+    $plain   = function ( $key ) { return trim( wp_strip_all_tags( clu_get_message( $key ) ) ); };
+
+    // Both off, as after an update.
+    $email = 'clu-mail-off@example.test';
+    $res   = register( [ 'email' => $email ] );
+    $u     = get_user_by( 'email', $email );
+    t( 'with both off, a sign-up waits for approval at once', ! empty( $res['success'] ) && clu_user_is_pending( $u ) && msg( $res ) === $plain( 'register_success' ), msg( $res ) );
+    t( 'with both off, the user gets no email', ! mails_to( $email ) );
+    t( 'and the admin hears about it', count( mails_to( $admin ) ) === 1 );
+    t( 'the role for unconfirmed accounts is not added', ! get_role( 'unconfirmed_user' ) );
+
+    // Registration received.
+    update_option( 'clu_mail', [ 'notify_received' => '1' ] );
+    $GLOBALS['clu_mails'] = [];
+    $email   = 'clu-mail-received@example.test';
+    register( [ 'email' => $email ] );
+    $u       = get_user_by( 'email', $email );
+    $to_user = mails_to( $email );
+    t( 'the user hears the registration was received', count( $to_user ) === 1 && $to_user[0]['subject'] === 'Website: We received your registration' && strpos( $to_user[0]['message'], esc_html( $u->display_name ) ) !== false, print_r( array_column( $to_user, 'subject' ), true ) );
+    t( 'the admin still hears about it', count( mails_to( $admin ) ) === 1 );
+    add_filter( 'clu_send_received_email', '__return_false' );
+    $GLOBALS['clu_mails'] = [];
+    register( [ 'email' => 'clu-mail-received2@example.test' ] );
+    remove_filter( 'clu_send_received_email', '__return_false' );
+    t( 'a filter can stop that email', ! mails_to( 'clu-mail-received2@example.test' ) && count( mails_to( $admin ) ) === 1 );
+
+    // Confirmation on.
+    update_option( 'clu_mail', [ 'confirm_email' => '1', 'notify_received' => '1' ] );
+    $GLOBALS['clu_mails'] = [];
+    $count = clu_get_pending_count();
+    $email = 'clu-confirm@example.test';
+    $res   = register( [ 'email' => $email ] );
+    $u     = get_user_by( 'email', $email );
+    t( 'the form asks to confirm the address', ! empty( $res['success'] ) && msg( $res ) === $plain( 'register_confirm_sent' ), msg( $res ) );
+    t( 'the account waits for its address, not for approval', $u && clu_user_is_unconfirmed( $u ) && ! clu_user_is_pending( $u ), $u ? implode( ',', $u->roles ) : 'no user' );
+    t( 'the role for it is there, for the users list', (bool) get_role( 'unconfirmed_user' ) );
+    t( 'what the user filled in is saved already', get_user_meta( $u->ID, 'company', true ) === 'Acme' );
+    t( 'the admin hears nothing yet', ! mails_to( $admin ) );
+    t( 'it is not counted as awaiting approval', clu_get_pending_count() === $count, clu_get_pending_count() . ' vs ' . $count );
+    $to_user = mails_to( $email );
+    t( 'the user gets one email: the link', count( $to_user ) === 1 && $to_user[0]['subject'] === 'Website: Please confirm your email address', print_r( array_column( $to_user, 'subject' ), true ) );
+    $link = link_from_mail( $to_user[0] ?? null );
+    $args = args_from_link( $link );
+    t( 'the link leads to the register page, for this account', strpos( (string) $link, $u_reg ) === 0 && strlen( $args['clu_confirm'] ?? '' ) === 32 && (int) ( $args['clu_user'] ?? 0 ) === $u->ID, (string) $link );
+    t( 'only a hash of the key is kept', strpos( (string) get_user_meta( $u->ID, 'clu_email_confirm', true ), $args['clu_confirm'] ?? '-' ) === false );
+
+    wp_set_password( 'Str0ng!Passw0rd', $u->ID );
+    $auth = wp_authenticate( $u->user_login, 'Str0ng!Passw0rd' );
+    t( 'it cannot log in, even with the right password', is_wp_error( $auth ) && $auth->get_error_code() === 'clu_account_unconfirmed', is_wp_error( $auth ) ? $auth->get_error_code() : 'logged in' );
+    $res = lost( $email );
+    t( 'it cannot get a reset email', empty( $res['success'] ) && msg( $res ) === $plain( 'account_unconfirmed' ) && count( mails_to( $email ) ) === 1, msg( $res ) );
+    t( 'the users list offers Approve only', clu_available_decisions( get_userdata( $u->ID ) ) === [ 'approve' ] );
+    wp_set_current_user( $u->ID );
+    t( 'it is kept out of the dashboard', clu_current_user_is_front_end_only() );
+    wp_set_current_user( 0 );
+
+    $to = open_confirm_link( add_query_arg( 'clu_confirm', ( $args['clu_confirm'] ?? '' ) . 'x', $link ) );
+    t( 'a wrong key is refused', strpos( $to, 'clu_email_confirmed=invalid' ) !== false && clu_user_is_unconfirmed( get_userdata( $u->ID ) ), $to );
+    $to = open_confirm_link( add_query_arg( 'clu_user', 1, $link ) );
+    t( 'a key works for its own account only', strpos( $to, 'clu_email_confirmed=invalid' ) !== false, $to );
+    $to = open_confirm_link( remove_query_arg( 'clu_user', $link ) );
+    t( 'a link without the account is refused', strpos( $to, 'clu_email_confirmed=invalid' ) !== false, $to );
+    $expire = function () { return -1; };
+    add_filter( 'clu_email_confirm_lifetime', $expire );
+    $to = open_confirm_link( $link );
+    remove_filter( 'clu_email_confirm_lifetime', $expire );
+    t( 'an expired link is refused', strpos( $to, 'clu_email_confirmed=invalid' ) !== false && clu_user_is_unconfirmed( get_userdata( $u->ID ) ), $to );
+    t( 'a request without a link is left alone', open_confirm_link( $u_reg ) === 'stays' );
+
+    $GLOBALS['clu_mails'] = [];
+    $to       = open_confirm_link( $link );
+    $u        = get_userdata( $u->ID );
+    $to_admin = mails_to( $admin );
+    t( 'the right link confirms the address and shows it on the register page', strpos( $to, $u_reg ) === 0 && strpos( $to, 'clu_email_confirmed=confirmed' ) !== false, $to );
+    t( 'the account now waits for approval', clu_user_is_pending( $u ) && ! clu_user_is_unconfirmed( $u ), implode( ',', $u->roles ) );
+    t( 'the admin hears about it now, with the details', count( $to_admin ) === 1 && strpos( $to_admin[0]['message'], 'Acme' ) !== false );
+    t( 'and the user hears it was received', count( mails_to( $email ) ) === 1 && mails_to( $email )[0]['subject'] === 'Website: We received your registration' );
+    t( 'it is counted as awaiting approval now', clu_get_pending_count() === $count + 1 );
+    t( 'the time of the confirmation is kept', (int) get_user_meta( $u->ID, 'clu_email_confirmed', true ) > 0 );
+    $GLOBALS['clu_mails'] = [];
+    $to = open_confirm_link( $link );
+    t( 'a second click says it is confirmed already, and sends nothing', strpos( $to, 'clu_email_confirmed=already' ) !== false && ! $GLOBALS['clu_mails'], $to );
+    $res = register( [ 'email' => $email ] );
+    t( 'once confirmed, the address counts as registered', empty( $res['success'] ) && msg( $res ) === $plain( 'email_already_registered' ), msg( $res ) );
+
+    // A lost or expired link.
+    forget_rate_limits();
+    $GLOBALS['clu_mails'] = [];
+    $email = 'clu-confirm-again@example.test';
+    register( [ 'email' => $email, 'company' => 'First' ] );
+    $first = confirm_link_of( $email );
+    $u     = get_user_by( 'email', $email );
+    $res   = register( [ 'email' => $email, 'company' => 'Second' ] );
+    $again = confirm_link_of( $email );
+    t( 'registering again before confirming sends a new link', ! empty( $res['success'] ) && msg( $res ) === $plain( 'register_confirm_sent' ) && count( mails_to( $email ) ) === 2 && $again && $again !== $first, msg( $res ) );
+    t( 'no second account is made', count( get_users( [ 'search' => $email, 'search_columns' => [ 'user_email' ], 'fields' => 'ID' ] ) ) === 1 );
+    t( 'the details from the first time stay', get_user_meta( $u->ID, 'company', true ) === 'First' );
+    t( 'the admin hears nothing', ! mails_to( $admin ) );
+    t( 'the new link replaces the one before', strpos( open_confirm_link( $first ), '=invalid' ) !== false );
+    $res = null;
+    for ( $i = 0; $i < 3; $i++ ) {
+        $res = register( [ 'email' => $email ] );
+    }
+    t( 'new links are limited per account', empty( $res['success'] ) && msg( $res ) === $plain( 'too_many_attempts' ) && count( mails_to( $email ) ) === 4, msg( $res ) . ' / ' . count( mails_to( $email ) ) );
+    t( 'and the newest link works', strpos( open_confirm_link( confirm_link_of( $email ) ), '=confirmed' ) !== false );
+
+    // The link cannot be sent.
+    forget_rate_limits();
+    $GLOBALS['clu_mails'] = [];
+    $fail  = function () { return false; };
+    $email = 'clu-confirm-fail@example.test';
+    add_filter( 'pre_wp_mail', $fail, 20 );
+    $res = register( [ 'email' => $email ] );
+    remove_filter( 'pre_wp_mail', $fail, 20 );
+    t( 'when the link cannot be sent, the form says so', empty( $res['success'] ) && msg( $res ) === $plain( 'confirm_email_send_failed' ), msg( $res ) );
+    t( 'the account stays, and nobody else hears about it', clu_user_is_unconfirmed( get_user_by( 'email', $email ) ) && ! mails_to( $admin ) );
+    $GLOBALS['clu_mails'] = [];
+    $res = register( [ 'email' => $email ] );
+    t( 'sending the form again sends the link', ! empty( $res['success'] ) && count( mails_to( $email ) ) === 1, msg( $res ) );
+
+    $GLOBALS['clu_mails'] = [];
+    $res = register( [ 'email' => 'clu-confirm-bot@example.test', 'clu_website' => 'spam' ] );
+    t( 'a bot gets the same answer, and nothing is made or sent', ! empty( $res['success'] ) && msg( $res ) === $plain( 'register_confirm_sent' ) && ! get_user_by( 'email', 'clu-confirm-bot@example.test' ) && ! $GLOBALS['clu_mails'] );
+
+    // An admin decides before the address is confirmed.
+    $email = 'clu-confirm-approve@example.test';
+    register( [ 'email' => $email ] );
+    $u = get_user_by( 'email', $email );
+    wp_set_current_user( 1 );
+    $GLOBALS['clu_mails'] = [];
+    $r = clu_decide_user( $u->ID, 'reject' );
+    t( 'an unconfirmed account cannot be rejected', $r === 'skipped' && clu_user_is_unconfirmed( get_userdata( $u->ID ) ) && ! $GLOBALS['clu_mails'], $r );
+    $r = clu_decide_user( $u->ID, 'approve' );
+    $u = get_userdata( $u->ID );
+    t( 'an admin can approve one directly', $r === 'done' && in_array( approved_role(), $u->roles, true ), $r . ' ' . implode( ',', $u->roles ) );
+    t( 'which sends the set-password email only', count( mails_to( $email ) ) === 1 && strpos( mails_to( $email )[0]['message'], 'key=' ) !== false && ! mails_to( $admin ), print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+    $GLOBALS['clu_mails'] = [];
+    $made = wp_insert_user( [ 'user_login' => 'clu_made_pending', 'user_email' => 'clu-made-pending@example.test', 'user_pass' => 'Start1!pass', 'role' => pending_role() ] );
+    wp_set_current_user( 0 );
+    $confirm_mails = array_filter( $GLOBALS['clu_mails'], function ( $m ) { return stripos( $m['subject'], 'confirm' ) !== false; } );
+    t( 'an account an admin makes in the pending role skips the confirmation', ! is_wp_error( $made ) && clu_user_is_pending( get_userdata( $made ) ) && ! $confirm_mails, print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+
+    // The form built into WordPress.
+    $GLOBALS['clu_mails'] = [];
+    $core_id = register_new_user( 'clu_core_confirm', 'clu-core-confirm@example.test' );
+    $to_user = mails_to( 'clu-core-confirm@example.test' );
+    t( 'a sign-up on the form built into WordPress confirms its address too', ! is_wp_error( $core_id ) && clu_user_is_unconfirmed( get_userdata( $core_id ) ) );
+    t( 'it gets the link, no email about a password, and the admin hears nothing', count( $to_user ) === 1 && $to_user[0]['subject'] === 'Website: Please confirm your email address' && ! mails_to( $admin ), print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+    add_action( 'register_new_user', 'wp_send_new_user_notifications' );
+    $old_default = get_option( 'default_role' );
+    update_option( 'default_role', pending_role() );
+    $GLOBALS['clu_mails'] = [];
+    $core_id2 = register_new_user( 'clu_core_confirm2', 'clu-core-confirm2@example.test' );
+    update_option( 'default_role', $old_default );
+    add_action( 'register_new_user', 'wp_send_new_user_notifications' );
+    t( 'the same with the pending role as the default role', ! is_wp_error( $core_id2 ) && clu_user_is_unconfirmed( get_userdata( $core_id2 ) ) && count( mails_to( 'clu-core-confirm2@example.test' ) ) === 1 && ! mails_to( $admin ), print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+    $link2 = confirm_link_of( 'clu-core-confirm2@example.test' );
+
+    // Turned off again.
+    update_option( 'clu_mail', [] );
+    $GLOBALS['clu_mails'] = [];
+    $to = open_confirm_link( $link2 );
+    t( 'a link sent before the confirmation was turned off still works', strpos( $to, '=confirmed' ) !== false && clu_user_is_pending( get_userdata( $core_id2 ) ) && count( mails_to( $admin ) ) === 1, $to );
+    forget_rate_limits();
+    $GLOBALS['clu_mails'] = [];
+    $res = register( [ 'email' => 'clu-core-confirm@example.test' ] );
+    t( 'an account still unconfirmed then gets a new link on registering again', ! empty( $res['success'] ) && confirm_link_of( 'clu-core-confirm@example.test' ) && msg( $res ) === $plain( 'register_confirm_sent' ), msg( $res ) );
+
+    // Where the result shows.
+    $html = render_shortcode_safe( $SC_REG, [ 'clu_email_confirmed' => 'confirmed' ] );
+    t( 'the register page shows the result in place of the form', strpos( $html, 'is confirmed' ) !== false && strpos( $html, 'signupform' ) === false, substr( $html, 0, 300 ) );
+    $html = render_shortcode_safe( $SC_LOGIN, [ 'clu_email_confirmed' => 'invalid' ] );
+    t( 'the login page shows it above its form', strpos( $html, 'clu-response--error' ) !== false && strpos( $html, 'loginform' ) !== false );
+    $html = render_shortcode_safe( $SC_REG, [ 'clu_email_confirmed' => '<b>x</b>' ] );
+    t( 'anything else shows the form as usual', strpos( $html, 'signupform' ) !== false && strpos( $html, '<b>x' ) === false );
+    $bad = add_query_arg( [ 'clu_confirm' => 'nope', 'clu_user' => 1 ], home_url( '/' ) );
+    wp_update_post( [ 'ID' => $p_reg, 'post_status' => 'draft' ] );
+    $to = open_confirm_link( $bad );
+    t( 'with no register page, the result shows on the login page', strpos( $to, $u_login ) === 0 && strpos( $to, '=invalid' ) !== false, $to );
+    wp_update_post( [ 'ID' => $p_login, 'post_status' => 'draft' ] );
+    $to = open_confirm_link( $bad );
+    t( 'with neither, on a page of its own', $to === 'page: ' . $plain( 'email_confirm_invalid' ), $to );
+
+    // Settings.
+    wp_set_current_user( 1 );
+    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => 'unconfirmed_user', 'approved_role' => approved_role() ], 1 );
+    t( 'the Unconfirmed User role cannot be chosen as the pending role', empty( $res['success'] ) && clu_get_role_slug( 'pending_role' ) === 'pending_user', msg( $res ) );
+    wp_set_current_user( 1 );
+    $res = ajax( 'clu_delete_role', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'role_slug' => 'unconfirmed_user' ], 1 );
+    t( 'nor deleted', empty( $res['success'] ) && get_role( 'unconfirmed_user' ), msg( $res ) );
+    wp_set_current_user( 1 );
+    ob_start();
+    clu_render_roles_tab();
+    $tab = ob_get_clean();
+    t( 'nor offered on the User Roles tab', strpos( $tab, 'value="unconfirmed_user"' ) === false && strpos( $tab, 'value="' . pending_role() . '"' ) !== false );
+    update_option( 'clu_roles', [ 'pending_role' => pending_role(), 'approved_role' => approved_role(), 'unconfirmed_role' => 'subscriber' ] );
+    t( 'and it is not a setting', clu_get_role_slug( 'unconfirmed_role' ) === 'unconfirmed_user' );
+    delete_option( 'clu_roles' );
+
+    if ( ! function_exists( 'add_settings_section' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/template.php';
+    }
+    clu_register_settings();
+    $clean = sanitize_option( 'clu_mail', [ 'confirm_email' => 'on', 'notify_received' => '', 'from_name' => 'X' ] );
+    t( 'the Mail tab saves its two switches as on or off', ( $clean['confirm_email'] ?? null ) === '1' && ( $clean['notify_received'] ?? null ) === '', print_r( $clean, true ) );
+    update_option( 'clu_mail', [ 'confirm_email' => '1' ] );
+    ob_start();
+    do_settings_sections( 'mail-group' );
+    $tab = ob_get_clean();
+    t( 'and shows them as checkboxes', preg_match( '/<input type="checkbox" id="confirm_email" name="clu_mail\[confirm_email\]" value="1"\s+checked/', $tab ) && strpos( $tab, 'name="clu_mail[notify_received]"' ) !== false && strpos( $tab, "name='clu_mail[from_email]'" ) !== false, substr( $tab, 0, 600 ) );
+    foreach ( clu_get_settings_tabs() as $tab_def ) {
+        if ( ! empty( $tab_def['option_name'] ) ) {
+            remove_all_filters( 'sanitize_option_' . $tab_def['option_name'] );
+        }
+    }
+    wp_set_current_user( 0 );
+}
+
+reset_state();
+section( '25. Nonces, templates, settings, update and uninstall' );
 {
     $res = ajax( 'clu_refresh_nonce', [ 'field' => 'login_nonce' ] );
     wp_set_current_user( 0 );
@@ -1667,9 +1934,12 @@ section( '24. Nonces, templates, settings, update and uninstall' );
     $marker_page = make_page( 'Uninstall marker', 'x', true );
     $marker_id = make_user( 'clu_uninst', 'clu-uninst@example.test', 'Start1!pass', 'subscriber' );
     update_user_meta( $marker_id, 'clu_approval_link', 1 );
+    update_user_meta( $marker_id, 'clu_email_confirm', '1:x' );
+    update_user_meta( $marker_id, 'clu_email_confirmed', 1 );
+    clu_add_unconfirmed_role();
     update_option( 'clu_mail', [ 'from_name' => 'x' ] );
     update_option( 'clu_replace_wp_login', '1' );
-    foreach ( [ 'pending_user', 'approved_user', 'rejected_user' ] as $r ) {
+    foreach ( [ 'pending_user', 'approved_user', 'rejected_user', 'unconfirmed_user' ] as $r ) {
         foreach ( get_users( [ 'role' => $r, 'fields' => 'ID' ] ) as $uid ) {
             get_userdata( $uid )->set_role( 'subscriber' );
         }
@@ -1679,14 +1949,15 @@ section( '24. Nonces, templates, settings, update and uninstall' );
     require CLU_PLUGIN_DIR . 'uninstall.php';
     wp_cache_flush();
     t( 'uninstall removes the settings', get_option( 'clu_mail', 'gone' ) === 'gone' && get_option( 'clu_db_version', 'gone' ) === 'gone' );
-    t( 'uninstall removes the unused roles', ! get_role( 'pending_user' ) && ! get_role( 'approved_user' ) && ! get_role( 'rejected_user' ) );
+    t( 'uninstall removes the unused roles', ! get_role( 'pending_user' ) && ! get_role( 'approved_user' ) && ! get_role( 'rejected_user' ) && ! get_role( 'unconfirmed_user' ) );
     t( 'uninstall removes the field list', get_option( 'clu_register_fields', 'gone' ) === 'gone' );
     t( 'uninstall removes the replacement setting', get_option( 'clu_replace_wp_login', 'gone' ) === 'gone' );
     t( 'uninstall removes the flag on users', ! get_user_meta( $marker_id, 'clu_approval_link', true ) );
+    t( 'uninstall removes what confirmed an address', ! get_user_meta( $marker_id, 'clu_email_confirm', true ) && ! get_user_meta( $marker_id, 'clu_email_confirmed', true ) );
     t( 'uninstall removes the flag on pages', get_post_meta( $marker_page, '_clu_restricted', true ) === '' );
 }
 
-section( '25. PHP warnings raised from inside the plugin during all of the above' );
+section( '26. PHP warnings raised from inside the plugin during all of the above' );
 $warnings = array_values( array_unique( $GLOBALS['clu_php_warnings'] ) );
 t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", array_slice( $warnings, 0, 12 ) ) );
 

@@ -46,6 +46,7 @@ function clu_default_messages() {
         'login_failed'               => 'The username, email or password is incorrect.',
         'account_pending'            => 'Your account is awaiting approval. We will email you as soon as it is approved.',
         'account_rejected'           => 'Your registration was not approved.',
+        'account_unconfirmed'        => 'Please confirm your email address first, through the link we emailed you.',
 
         // ── AJAX: Register ───────────────────────────────────────────────
         'register_required_fields'   => 'Please fill in all required fields.',
@@ -53,6 +54,8 @@ function clu_default_messages() {
         'register_invalid_field'     => 'Please check this field: {field}',
         'email_already_registered'   => 'This email address is already registered.',
         'register_success'           => 'Thank you for registering! We will email you as soon as your account is approved.',
+        'register_confirm_sent'      => 'Thank you for registering! To complete it, please click the link we emailed you to confirm your email address.',
+        'confirm_email_send_failed'  => 'We could not send the confirmation email. Please try again later.',
 
         // ── AJAX: Password Lost ──────────────────────────────────────────
         'email_required'             => 'Please enter your email address.',
@@ -82,6 +85,11 @@ function clu_default_messages() {
         'invalid_reset_link_page'    => 'The password reset link is invalid.',
         'expired_reset_link_page'    => 'The password reset link is invalid or has expired.',
 
+        // ── Shortcode: Register or Login page, after the link that confirms an email ──
+        'email_confirmed'            => 'Thank you, your email address is confirmed. We will email you as soon as your account is approved.',
+        'email_already_confirmed'    => 'Your email address is already confirmed.',
+        'email_confirm_invalid'      => 'This confirmation link is invalid or has expired. To get a new one, register again with the same email address.',
+
         // ── Shortcode: Auth Buttons ──────────────────────────────────────
         'logout_button_text'         => 'Logout',
         'login_button_text'          => 'Login',
@@ -105,11 +113,24 @@ function clu_default_messages() {
         'email_link_text'            => 'Link',
         'email_edit_user_text'       => 'Edit User',
         'email_pending_list_text'    => 'Users awaiting approval',
+        'email_confirm_link_text'    => 'Confirm my email address',
 
         // ── Email: Password Lost (sent to user) ──────────────────────────
         // {display_name} = display name, {reset_url} = reset URL, {reset_link} = linked text
         'reset_email_subject'        => 'Password Reset Request',
         'reset_email_body'           => "Hello {display_name},\n\nWe received a request to reset your password. Please click the link below to reset your password:\n\n{reset_link}\n\nIf you did not request this, you can ignore this email.",
+
+        // ── Email: Confirm the email address (sent to user) ──────────────
+        // %s or {display_name} = display name
+        'confirm_email_subject'      => 'Website: Please confirm your email address',
+        // {display_name} = display name, {confirm_url} = confirmation URL, {confirm_link} = linked text
+        'confirm_email_body'         => "Hello {display_name},<br><br>To complete your registration, please confirm your email address:<br><br>{confirm_link}<br><br>If you did not register on our website, you can ignore this email.",
+
+        // ── Email: Registration received (sent to user) ──────────────────
+        // %s or {display_name} = display name
+        'notify_received_subject'    => 'Website: We received your registration',
+        // {display_name} = display name
+        'notify_received_body'       => "Hello {display_name},<br><br>Thank you for registering. We received your details, and we will email you as soon as your account is approved.",
 
         // ── Email: New Registration (sent to admin) ──────────────────────
         // %s or {display_name} = display name

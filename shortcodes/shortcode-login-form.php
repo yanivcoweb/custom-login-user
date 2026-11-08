@@ -28,5 +28,6 @@ function clu_render_login_form( $attributes ) {
     // Set when a login posted to wp-login.php failed and was sent here.
     $attributes['error']     = isset( $_GET['clu_login_error'] ) ? clu_render_message( 'login_failed' ) : '';
 
-    return clu_get_template_html( 'form_login', $attributes );
+    // Where the link that confirms an email address leads, when there is no register page.
+    return clu_email_confirmation_notice() . clu_get_template_html( 'form_login', $attributes );
 }

@@ -5,16 +5,22 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Returns the configured role slug for a given slot.
  *
- * @param string $type  'pending_role', 'approved_role' or 'rejected_role'
+ * @param string $type  'pending_role', 'approved_role', 'rejected_role' or 'unconfirmed_role'
  * @return string       The role slug
  */
 function clu_get_role_slug( $type ) {
     $options  = get_option( 'clu_roles', [] );
     $defaults = [
-        'pending_role'  => 'pending_user',
-        'approved_role' => 'approved_user',
-        'rejected_role' => 'rejected_user', // Not a setting: rejected users always get this one.
+        'pending_role'     => 'pending_user',
+        'approved_role'    => 'approved_user',
+        // Not settings: these two always get the same role.
+        'rejected_role'    => 'rejected_user',
+        'unconfirmed_role' => 'unconfirmed_user',
     ];
+
+    if ( $type === 'rejected_role' || $type === 'unconfirmed_role' ) {
+        return $defaults[ $type ];
+    }
 
     return ( is_array( $options ) && ! empty( $options[ $type ] ) ) ? $options[ $type ] : $defaults[ $type ];
 }
@@ -43,6 +49,29 @@ function clu_add_rejected_role() {
         'edit_posts'   => false,
         'delete_posts' => false,
     ] );
+}
+
+/**
+ * Adds the role of users who have not confirmed their email address yet, if it is
+ * missing. Only when a site asks for confirmation, so other sites never see it.
+ */
+function clu_add_unconfirmed_role() {
+    add_role( 'unconfirmed_user', __( 'Unconfirmed User', 'custom-login-users' ), [
+        'read'         => false,
+        'edit_posts'   => false,
+        'delete_posts' => false,
+    ] );
+}
+
+/**
+ * Tells whether a role is kept for the plugin's own use, so that it cannot be chosen as
+ * the pending or approved role, or deleted.
+ *
+ * @param string $slug
+ * @return bool
+ */
+function clu_role_is_reserved( $slug ) {
+    return in_array( $slug, [ clu_get_role_slug( 'rejected_role' ), clu_get_role_slug( 'unconfirmed_role' ) ], true );
 }
 
 /**

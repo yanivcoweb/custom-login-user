@@ -3,7 +3,7 @@
 A WordPress plugin that adds front-end pages for login, registration, password reset and account details, with an admin approval step for new users.
 
 **Author:** Yaniv Sasson
-**Version:** 1.4.0
+**Version:** 1.5.0
 
 ---
 
@@ -14,9 +14,10 @@ A WordPress plugin that adds front-end pages for login, registration, password r
 - Restricted content: whole pages or parts of a page for approved users only
 - Flexible register form: turn fields on and off, make them required or optional, change their order, add your own, and choose which ones users can change on My Account
 - Admin notification email on new registrations with what the user filled in, an email with a set-password link upon approval, and a rejection email
+- Optional emails to new users: a link that confirms their address before the registration reaches the admin, and a note that the registration was received
 - Every label and message can be edited in the settings, so the forms work in any language, including right-to-left
 - Configurable password rules (min length, uppercase, lowercase, numbers, symbols)
-- Custom user roles: `Pending User`, `Approved User` and `Rejected User`, all kept out of the WordPress dashboard
+- Custom user roles: `Pending User`, `Approved User` and `Rejected User`, and `Unconfirmed User` on sites that ask for the address to be confirmed, all kept out of the WordPress dashboard
 - Protection against spam and abuse: a hidden bot trap and a limit on the registration form, a limit on reset emails, and the same answer for known and unknown accounts on the login and lost-password forms
 
 The plugin adds pages next to the default ones, and `wp-login.php` keeps working. To send `wp-login.php` and the links to it to your pages instead, turn on **Replace wp-login.php**.
@@ -52,6 +53,25 @@ The login form honours `?redirect_to=` for addresses on the same site.
 Rejecting moves the user to the **Rejected User** role and emails them. They cannot log in or reset a password, and they cannot register again with the same address. The account stays, so a mistake can be undone with **Approve**, which sends the set-password email. To remove someone without an email, such as a bot, use the normal **Delete** link.
 
 Registration follows the WordPress setting **Settings > General > Anyone can register**. When it is off, the form and its AJAX endpoint are both closed.
+
+---
+
+## Emails to New Users
+
+Both are off by default, on the **Mail** tab.
+
+**Confirm the email address.** A new user gets an email with a link, and the registration reaches the admin only once they click it. Made-up and mistyped addresses never reach you.
+
+- Until then the account has the **Unconfirmed User** role. It cannot log in or reset a password, and it is not counted as awaiting approval
+- The link leads to the register page, or the login page if there is none, which says whether it worked. It stays valid for 7 days
+- Registering again with the same address sends a new link and keeps the details from the first time. This is the way to get a link that was lost or expired
+- Sign-ups through the form built into WordPress confirm their address too
+- On the Users list an unconfirmed account offers **Approve** only, for an admin who knows the person. Accounts nobody confirmed can be removed with **Delete**. They are not removed by themselves
+- Turning this on or off does not change accounts that already exist, and links already sent keep working
+
+**Registration received.** The user gets an email saying the registration was received and waits for approval. With the confirmation on, it goes out once the address is confirmed.
+
+The texts of both emails, and of the messages around them, are on the Messages tab.
 
 ---
 
@@ -149,7 +169,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 ## Settings
 
 - **Pages URL** — The login, register, password and redirect addresses
-- **Mail** — Sender details and who hears about new registrations
+- **Mail** — Sender details, who hears about new registrations, and the emails to new users
 - **Register Fields** — What the register form asks for
 - **Register, Login, Password Reset, Password Lost and My Account Form** — Labels, buttons and validation texts
 - **Password Rules** — Requirements for new passwords
@@ -163,12 +183,14 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 
 | Filter | Use |
 |---|---|
-| `clu_rate_limit` | Change a limit, or return 0 to turn it off. Receives the limit and the action: `register` (10 an hour per IP), `lost_password_ip` (20 per 15 minutes), `lost_password_account` (3 emails per 15 minutes) |
+| `clu_rate_limit` | Change a limit, or return 0 to turn it off. Receives the limit and the action: `register` (10 an hour per IP), `confirm_resend` (3 new confirmation links an hour per account), `lost_password_ip` (20 per 15 minutes), `lost_password_account` (3 emails per 15 minutes) |
 | `clu_client_ip` | Return the real visitor IP on a site behind a proxy or CDN, where `REMOTE_ADDR` is the proxy |
 | `clu_approval_link_lifetime` | Seconds an approval link stays valid |
 | `clu_user_is_pending` | Decide whether a user counts as waiting for approval |
 | `clu_privileged_capabilities` | The capabilities that disqualify a role from being pending or approved |
 | `clu_send_rejection_email` | Return false to reject users without emailing them. Receives the user |
+| `clu_send_received_email` | Decide whether a user gets the registration received email. Receives the Mail tab setting and the user |
+| `clu_email_confirm_lifetime` | Seconds a link that confirms an email address stays valid |
 | `clu_region_countries` | The regions and countries of the Region and Country fields |
 | `clu_user_can_view_restricted` | Decide who sees restricted content, for example to let in a role that was on the site before the approval flow. Receives the answer, the user and the post ID, which is 0 for restricted content in general |
 | `clu_restrictable_post_types` | The post types that offer the Access box |
@@ -199,6 +221,16 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.5.0
+
+Added
+
+- **Confirm the email address**, off by default: new users confirm their address through an emailed link before the registration reaches the admin. See Emails to New Users above.
+- **Registration received email**, off by default.
+- The Unconfirmed User role, added only once the confirmation is used.
+
+Nothing changes on an existing site until one of them is turned on on the Mail tab.
 
 ### 1.4.0
 

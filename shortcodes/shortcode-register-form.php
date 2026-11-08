@@ -11,6 +11,14 @@ defined( 'ABSPATH' ) || exit;
 add_shortcode( 'custom-register-form', 'clu_render_register_form' );
 add_shortcode( 'clu_register_form', 'clu_render_register_form' );
 function clu_render_register_form( $attributes ) {
+    // Where the link that confirms an email address leads. The registration is done.
+    $notice = clu_email_confirmation_notice();
+
+    if ( $notice !== '' ) {
+        wp_enqueue_style( 'clu-forms' );
+        return $notice;
+    }
+
     if ( is_user_logged_in() ) {
         return clu_render_message( 'user_logged_in_register' );
     }

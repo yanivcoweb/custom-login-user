@@ -8,6 +8,11 @@ defined( 'ABSPATH' ) || exit;
  * Returns the decisions open for a user: approve and reject while pending, and
  * approve for a user who was rejected, so that a mistake can be undone.
  *
+ * Approve only for a user who has not confirmed their address yet: an admin who knows
+ * them may let them in, and the email of the approval goes to that address anyway. A
+ * rejection would go to an address nobody confirmed, which is often a made-up one, so
+ * Delete is the way to remove those.
+ *
  * @param WP_User $user
  * @return string[]
  */
@@ -16,7 +21,7 @@ function clu_available_decisions( $user ) {
         return [ 'approve', 'reject' ];
     }
 
-    return clu_user_is_rejected( $user ) ? [ 'approve' ] : [];
+    return clu_user_is_rejected( $user ) || clu_user_is_unconfirmed( $user ) ? [ 'approve' ] : [];
 }
 
 /**

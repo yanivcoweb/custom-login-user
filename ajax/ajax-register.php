@@ -15,9 +15,12 @@ function clu_handle_ajax_register() {
         wp_send_json_error( [ 'message' => clu_render_message( 'user_logged_in_register' ) ] );
     }
 
+    $confirm = clu_email_confirmation_is_on();
+    $success = [ 'message' => clu_render_message( $confirm ? 'register_confirm_sent' : 'register_success' ) ];
+
     // Trap field, hidden from people. Bots get the normal answer and nothing is created.
     if ( clu_post_text( 'clu_website' ) !== '' ) {
-        wp_send_json_success( [ 'message' => clu_render_message( 'register_success' ) ] );
+        wp_send_json_success( $success );
     }
 
     $values = clu_read_posted_fields( clu_get_register_form_fields() );
@@ -30,12 +33,32 @@ function clu_handle_ajax_register() {
     $first_name = $values['first_name'] ?? '';
     $last_name  = $values['last_name'] ?? '';
 
-    if ( email_exists( $email ) ) {
+    $existing = email_exists( $email ) ? get_user_by( 'email', $email ) : false;
+
+    if ( $existing && ! clu_user_is_unconfirmed( $existing ) ) {
         wp_send_json_error( [ 'message' => clu_render_message( 'email_already_registered' ) ] );
     }
 
     if ( clu_rate_limited( 'register', 10, HOUR_IN_SECONDS ) ) {
         wp_send_json_error( [ 'message' => clu_render_message( 'too_many_attempts' ) ] );
+    }
+
+    // Registered before and never confirmed: a new link, for someone whose first one got
+    // lost or expired. The details sent the first time stay.
+    if ( $existing ) {
+        if ( clu_rate_limited( 'confirm_resend', 3, HOUR_IN_SECONDS, (string) $existing->ID ) ) {
+            wp_send_json_error( [ 'message' => clu_render_message( 'too_many_attempts' ) ] );
+        }
+
+        if ( ! clu_send_confirmation_email( $existing ) ) {
+            wp_send_json_error( [ 'message' => clu_render_message( 'confirm_email_send_failed' ) ] );
+        }
+
+        wp_send_json_success( [ 'message' => clu_render_message( 'register_confirm_sent' ) ] );
+    }
+
+    if ( $confirm ) {
+        clu_add_unconfirmed_role();
     }
 
     // Saved before anything else hears about the new user, because the email to the
@@ -54,7 +77,9 @@ function clu_handle_ajax_register() {
         'first_name' => $first_name,
         'last_name'  => $last_name,
         'nickname'   => trim( $first_name . ' ' . $last_name ),
-        'role'       => clu_get_registration_role(),
+        // Not pending yet when the address has to be confirmed first, so that nobody
+        // hears about the registration before then.
+        'role'       => $confirm ? clu_get_role_slug( 'unconfirmed_role' ) : clu_get_registration_role(),
     ] ) );
 
     remove_action( 'user_register', $save_values, 1 );
@@ -63,7 +88,12 @@ function clu_handle_ajax_register() {
         wp_send_json_error( [ 'message' => wp_kses_post( $user_id->get_error_message() ) ] );
     }
 
-    wp_send_json_success( [ 'message' => clu_render_message( 'register_success' ) ] );
+    // The account stays, so sending the form again later sends a new link.
+    if ( $confirm && ! clu_send_confirmation_email( get_userdata( $user_id ) ) ) {
+        wp_send_json_error( [ 'message' => clu_render_message( 'confirm_email_send_failed' ) ] );
+    }
+
+    wp_send_json_success( $success );
 }
 
 /**

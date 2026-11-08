@@ -84,7 +84,7 @@ function clu_rate_limited( $bucket, $limit, $window, $subject = '' ) {
      * Filters the attempts allowed for a rate-limited action.
      *
      * @param int    $limit  Attempts allowed. 0 turns the limit off.
-     * @param string $bucket register, lost_password_ip or lost_password_account.
+     * @param string $bucket register, confirm_resend, lost_password_ip or lost_password_account.
      */
     $limit = (int) apply_filters( 'clu_rate_limit', $limit, $bucket );
 
@@ -452,13 +452,37 @@ function clu_get_set_password_url( $user, $key ) {
     );
 }
 
+/**
+ * Acts on an account made in the pending role. The plugin's own form makes accounts
+ * that still have to confirm their address in another role, and sends the link itself.
+ */
 add_action( 'user_register', 'clu_on_user_register' );
 function clu_on_user_register( $user_id ) {
     $user = get_userdata( $user_id );
 
-    if ( $user && in_array( clu_get_role_slug( 'pending_role' ), (array) $user->roles, true ) ) {
-        clu_send_new_user_email( $user );
+    if ( ! $user || ! in_array( clu_get_role_slug( 'pending_role' ), (array) $user->roles, true ) ) {
+        return;
     }
+
+    // A sign-up from another form, such as the one built into WordPress when the pending
+    // role is the site's default role. Not an account made by someone who manages users.
+    if ( clu_email_confirmation_is_on() && ! current_user_can( 'create_users' ) ) {
+        clu_ask_to_confirm_email( $user );
+        return;
+    }
+
+    clu_send_registration_emails( $user );
+}
+
+/**
+ * Sends the emails of a registration that now waits for approval: to the admin, and
+ * to the user if the site wants them told.
+ *
+ * @param WP_User $user
+ */
+function clu_send_registration_emails( $user ) {
+    clu_send_new_user_email( $user );
+    clu_send_received_email( $user );
 }
 
 /**
@@ -496,17 +520,23 @@ function clu_send_new_user_email( $user ) {
 }
 
 /**
- * Acts on a role change, whether it came from the Approve and Reject links or from the
- * role control on the user's screen.
+ * Acts on a role change, whether it came from the Approve and Reject links, from a
+ * confirmed email address, or from the role control on the user's screen.
  */
 add_action( 'set_user_role', 'clu_on_user_role_change', 10, 3 );
 function clu_on_user_role_change( $user_id, $new_role, $old_roles ) {
-    $pending  = clu_get_role_slug( 'pending_role' );
-    $rejected = clu_get_role_slug( 'rejected_role' );
-    $old      = (array) $old_roles;
+    $pending     = clu_get_role_slug( 'pending_role' );
+    $rejected    = clu_get_role_slug( 'rejected_role' );
+    $unconfirmed = clu_get_role_slug( 'unconfirmed_role' );
+    $old         = (array) $old_roles;
 
-    if ( $new_role === clu_get_role_slug( 'approved_role' ) && ( in_array( $pending, $old, true ) || in_array( $rejected, $old, true ) ) ) {
+    if ( $new_role === clu_get_role_slug( 'approved_role' ) && array_intersect( [ $pending, $rejected, $unconfirmed ], $old ) ) {
         clu_send_set_password_email( $user_id );
+    }
+
+    // The address is confirmed, so the registration reaches the admin now.
+    if ( $new_role === $pending && in_array( $unconfirmed, $old, true ) ) {
+        clu_send_registration_emails( get_userdata( $user_id ) );
     }
 
     if ( $new_role === $rejected && in_array( $pending, $old, true ) ) {
@@ -514,9 +544,41 @@ function clu_on_user_role_change( $user_id, $new_role, $old_roles ) {
     }
 
     // These accounts may not log in, so one that is logged in right now has to go too.
-    if ( $new_role === $pending || $new_role === $rejected ) {
+    if ( in_array( $new_role, [ $pending, $rejected, $unconfirmed ], true ) ) {
         WP_Session_Tokens::get_instance( $user_id )->destroy_all();
     }
+}
+
+/**
+ * Tells a user that their registration was received and waits for approval, if the
+ * site turned this on, on the Mail tab.
+ *
+ * @param WP_User $user
+ */
+function clu_send_received_email( $user ) {
+    /**
+     * Filters whether a user hears that their registration was received.
+     *
+     * @param bool    $send Whether the Mail tab asks for it.
+     * @param WP_User $user
+     */
+    if ( ! $user || ! apply_filters( 'clu_send_received_email', clu_get_mail_setting( 'notify_received' ) === '1', $user ) ) {
+        return;
+    }
+
+    $mail_host = clu_get_mail_host();
+    $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
+    $name      = esc_html( $user->display_name );
+
+    $message = clu_format_message_template(
+        clu_get_message( 'notify_received_body' ),
+        [
+            '%1$s'           => $name,
+            '{display_name}' => $name,
+        ]
+    );
+
+    wp_mail( $user->user_email, clu_format_subject( 'notify_received_subject', $user->display_name ), $message, $headers );
 }
 
 /**
