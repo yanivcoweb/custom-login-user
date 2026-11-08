@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
 function clu_get_message( $key ) {
     $options = get_option( 'clu_messages', [] );
     $saved   = is_array( $options ) && isset( $options[ $key ] ) ? (string) $options[ $key ] : '';
-    $message = clu_is_custom_text( $saved, clu_english_messages()[ $key ] ?? '' )
+    $message = clu_is_custom_text( $saved, clu_english_messages()[ $key ] ?? '', clu_legacy_defaults()['messages'][ $key ] ?? [] )
         ? $saved
         : ( clu_default_messages()[ $key ] ?? '' );
 
@@ -19,16 +19,47 @@ function clu_get_message( $key ) {
 }
 
 /**
- * Tells whether a saved text was written by an admin. Empty, or still the English
- * default, it was not, and the default in the site's language shows instead. Versions
- * before 1.7.0 saved every default along with the texts an admin changed.
+ * Tells whether a saved text was written by an admin. Empty, or still a default, it was
+ * not, and the current default in the site's language shows instead. Versions before
+ * 1.7.0 saved every default along with the texts an admin changed, and the editor on the
+ * Messages tab, or the line breaks of version 1.0, may have changed how it is written,
+ * so the words are compared, not the markup.
  *
- * @param string $saved
- * @param string $english The default in English.
+ * @param string   $saved
+ * @param string   $english The current default in English.
+ * @param string[] $legacy  Defaults of version 1.0, where they differ.
  * @return bool
  */
-function clu_is_custom_text( $saved, $english ) {
-    return $saved !== '' && $saved !== $english;
+function clu_is_custom_text( $saved, $english, $legacy = [] ) {
+    if ( trim( $saved ) === '' ) {
+        return false;
+    }
+
+    $words = clu_text_fingerprint( $saved );
+
+    foreach ( array_merge( [ $english ], (array) $legacy ) as $default ) {
+        if ( $words === clu_text_fingerprint( $default ) ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Returns the words of a text, with its markup and spacing left out, and the address of
+ * each link kept, so that a changed link still counts as a change.
+ *
+ * @param string $text
+ * @return string
+ */
+function clu_text_fingerprint( $text ) {
+    $text = preg_replace( '/<a\s[^>]*href\s*=\s*["\']([^"\']*)["\'][^>]*>/i', ' $1 ', (string) $text );
+    $text = html_entity_decode( $text, ENT_QUOTES, 'UTF-8' );
+    $text = preg_replace( '#<br\s*/?>|</p>\s*<p[^>]*>|\r?\n#i', ' ', $text );
+    $text = wp_strip_all_tags( $text );
+
+    return trim( preg_replace( '/\s+/u', ' ', $text ) );
 }
 
 /**
@@ -93,6 +124,7 @@ function clu_default_messages() {
 
         // ── AJAX: Login ──────────────────────────────────────────────────
         'login_success'              => __( 'Login successful!', 'custom-login-users' ),
+        'login_second_step'          => __( 'Please continue to the second step of your login.', 'custom-login-users' ),
         'login_failed'               => __( 'The username, email or password is incorrect.', 'custom-login-users' ),
         // {minutes} is replaced at runtime with the minutes left.
         'login_locked'               => __( 'Too many failed login attempts. Please try again in {minutes} minutes.', 'custom-login-users' ),

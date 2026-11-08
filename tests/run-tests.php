@@ -64,6 +64,15 @@ if ( $bare ) {
     $fake = function () { return 'clu-no-theme'; };
     $preinit['template']   = [ 10 => [ [ 'function' => $fake, 'accepted_args' => 0 ] ] ];
     $preinit['stylesheet'] = [ 10 => [ [ 'function' => $fake, 'accepted_args' => 0 ] ] ];
+} else {
+    // A copy of the plugin the site has installed is left out: the copy under test is the
+    // one loaded above. This lets the tests run on a copy of a site with an older version.
+    $others = function ( $plugins ) {
+        return array_values( array_filter( (array) $plugins, function ( $plugin ) {
+            return basename( $plugin ) !== 'custom-login-users.php';
+        } ) );
+    };
+    $preinit['option_active_plugins'] = [ 10 => [ [ 'function' => $others, 'accepted_args' => 1 ] ] ];
 }
 // English, whatever the site's language, so that the texts compared below are known.
 // The Hebrew tests switch to it on their own.
@@ -73,6 +82,10 @@ $GLOBALS['wp_filter'] = $preinit;
 require $argv[1];
 
 global $wpdb;
+
+// The tests act as this administrator: the first one, since not every site has a user 1.
+$clu_admins = get_users( [ 'role' => 'administrator', 'number' => 1, 'orderby' => 'ID', 'order' => 'ASC', 'fields' => 'ID' ] );
+define( 'CLU_TEST_ADMIN', $clu_admins ? (int) $clu_admins[0] : 1 );
 
 /* ─── Test tools ─────────────────────────────────────────────────────── */
 
@@ -92,6 +105,12 @@ if ( ! defined( 'DOING_AJAX' ) ) {
 }
 
 $GLOBALS['clu_results'] = [ 'pass' => 0, 'fail' => 0, 'failed' => [] ];
+
+/** Notes a test this site cannot run, and why. Neither a pass nor a failure. */
+function skip( $name, $why ) {
+    $GLOBALS['clu_results']['skip'] = ( $GLOBALS['clu_results']['skip'] ?? 0 ) + 1;
+    fwrite( STDOUT, "  skip  " . $name . "\n          -> " . $why . "\n" );
+}
 
 function t( $name, $ok, $detail = '' ) {
     $key = $ok ? 'pass' : 'fail';
@@ -409,7 +428,15 @@ reset_state();
 $GLOBALS['clu_mails'] = [];
 $res = register( [ 'email' => 'clu-noadmin@example.test' ] );
 $m   = last_mail();
-t( 'with no address configured, admin_email is notified', $m && $m['to'] === get_option( 'admin_email' ), $m ? 'to = "' . print_r( $m['to'], true ) . '"' : 'no mail' );
+t( 'with no address configured, admin_email is notified', $m && $m['to'] === trim( get_option( 'admin_email' ) ), $m ? 'to = "' . print_r( $m['to'], true ) . '"' : 'no mail' );
+// Saving trims it, but a site was found with a line break after it, put there directly.
+$with_break = function ( $email ) { return trim( $email ) . "\n"; };
+add_filter( 'option_admin_email', $with_break );
+$GLOBALS['clu_mails'] = [];
+register( [ 'email' => 'clu-noadmin2@example.test' ] );
+$m = last_mail();
+remove_filter( 'option_admin_email', $with_break );
+t( 'even when a line break was saved after it', $m && $m['to'] === trim( get_option( 'admin_email' ) ), $m ? 'to = "' . addcslashes( print_r( $m['to'], true ), "\n" ) . '"' : 'no mail' );
 reset_state();
 $limited = false;
 for ( $i = 0; $i < 40; $i++ ) {
@@ -530,12 +557,12 @@ t( 'the register form contains no inline script', stripos( $html, '<script' ) ==
 
 reset_state();
 section( '11. Roles' );
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 $roles_nonce = wp_create_nonce( 'clu_roles_nonce' );
-$res = ajax( 'clu_save_roles', [ 'nonce' => $roles_nonce, 'pending_role' => 'administrator', 'approved_role' => 'approved_user' ], 1 );
+$res = ajax( 'clu_save_roles', [ 'nonce' => $roles_nonce, 'pending_role' => 'administrator', 'approved_role' => 'approved_user' ], CLU_TEST_ADMIN );
 t( 'administrator cannot be the registration role', empty( $res['success'] ), msg( $res ) );
-wp_set_current_user( 1 );
-$res = ajax( 'clu_save_roles', [ 'nonce' => $roles_nonce, 'pending_role' => 'pending_user', 'approved_role' => 'administrator' ], 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
+$res = ajax( 'clu_save_roles', [ 'nonce' => $roles_nonce, 'pending_role' => 'pending_user', 'approved_role' => 'administrator' ], CLU_TEST_ADMIN );
 t( 'administrator cannot be the approval role', empty( $res['success'] ), msg( $res ) );
 delete_option( 'clu_roles' );
 update_option( 'clu_roles', [ 'pending_role' => 'administrator', 'approved_role' => 'approved_user' ] );
@@ -546,12 +573,12 @@ $u     = get_user_by( 'email', $email );
 t( 'an old saved privileged role never reaches a public sign-up', $u && ! in_array( 'administrator', $u->roles, true ), $u ? implode( ',', $u->roles ) : msg( $res ) );
 delete_option( 'clu_roles' );
 make_user( 'clu_role_holder', 'clu-rh@example.test', 'Start1!pass', 'pending_user' );
-wp_set_current_user( 1 );
-$res = ajax( 'clu_delete_role', [ 'nonce' => $roles_nonce, 'role_slug' => 'pending_user' ], 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
+$res = ajax( 'clu_delete_role', [ 'nonce' => $roles_nonce, 'role_slug' => 'pending_user' ], CLU_TEST_ADMIN );
 t( 'a role in use cannot be deleted', empty( $res['success'] ) && get_role( 'pending_user' ), msg( $res ) );
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 add_role( 'clu_tmp_role', 'Tmp' );
-$res = ajax( 'clu_delete_role', [ 'nonce' => $roles_nonce, 'role_slug' => 'clu_tmp_role' ], 1 );
+$res = ajax( 'clu_delete_role', [ 'nonce' => $roles_nonce, 'role_slug' => 'clu_tmp_role' ], CLU_TEST_ADMIN );
 t( 'an unused custom role can be deleted', ! empty( $res['success'] ) && ! get_role( 'clu_tmp_role' ), msg( $res ) );
 t( 'roles are not re-added on every request', ! has_action( 'init', 'add_custom_user_role' ) );
 wp_set_current_user( 0 );
@@ -562,7 +589,7 @@ reset_state();
 section( '12. Profile fields in wp-admin' );
 if ( $bare ) {
 $id = make_user( 'clu_prof', 'clu-prof@example.test', 'Start1!pass', 'subscriber' );
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 $_POST = wp_slash( [ 'company' => '<script>alert(1)</script>Acme', 'customer_type' => 'X', 'region' => 'Y', 'country' => 'Z' ] );
 do_action( 'edit_user_profile_update', $id );
 t( 'company is sanitized when saved from wp-admin', strpos( (string) get_user_meta( $id, 'company', true ), '<script' ) === false, (string) get_user_meta( $id, 'company', true ) );
@@ -591,7 +618,7 @@ $redirected = function ( $user_id ) {
 };
 t( 'an approved user is sent away from the dashboard', $redirected( $approved_id ) );
 t( 'a user with another role is not', ! $redirected( $plain_id ) );
-t( 'an administrator is not', ! $redirected( 1 ) );
+t( 'an administrator is not', ! $redirected( CLU_TEST_ADMIN ) );
 remove_all_filters( 'wp_redirect' );
 remove_filter( 'wp_doing_ajax', '__return_false', 99 );
 wp_set_current_user( $approved_id );
@@ -621,7 +648,7 @@ require_once ABSPATH . 'wp-admin/includes/user.php';
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
 /** Runs the users-screen handler the way a click does. Returns what it redirected to, or 'died'. */
-function decide( $action, $user_ids, $nonce = null, $as = 1 ) {
+function decide( $action, $user_ids, $nonce = null, $as = CLU_TEST_ADMIN ) {
     wp_set_current_user( $as );
     $_REQUEST = [ 'action' => $action, 'users' => (array) $user_ids, '_wpnonce' => $nonce === null ? wp_create_nonce( 'bulk-users' ) : $nonce ];
     $_GET     = $_REQUEST;
@@ -654,7 +681,7 @@ $u2 = make_user( 'clu_d2', 'clu-d2@example.test', 'Start1!pass', pending_role() 
 $u3 = make_user( 'clu_d3', 'clu-d3@example.test', 'Start1!pass', pending_role() );
 $plain = make_user( 'clu_d_plain', 'clu-dp@example.test', 'Start1!pass', 'subscriber' );
 
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 $actions = apply_filters( 'user_row_actions', [ 'edit' => 'x' ], get_userdata( $u1 ) );
 t( 'a pending user gets Approve and Reject links', isset( $actions['clu_approve'], $actions['clu_reject'], $actions['edit'] ) );
 $actions = apply_filters( 'user_row_actions', [], get_userdata( $plain ) );
@@ -706,7 +733,7 @@ clean_user_cache( $u2 );
 $res = set_password( 'clu_d2', $plain_key, 'Str0ng!Passw0rd' );
 t( 'a key from before the rejection stops working', empty( $res['success'] ), msg( $res ) );
 
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 $actions = apply_filters( 'user_row_actions', [], get_userdata( $u2 ) );
 t( 'a rejected user can still be approved, and not rejected again', isset( $actions['clu_approve'] ) && ! isset( $actions['clu_reject'] ) );
 wp_set_current_user( 0 );
@@ -723,7 +750,7 @@ $GLOBALS['clu_mails'] = [];
 $target = decide( 'clu_reject', [ $u3, $u4, $plain, 1, 999999 ] );
 $q = query_of( $target );
 t( 'a bulk action handles several users at once', ( $q['clu_rejected'] ?? 0 ) == 2 && count( $GLOBALS['clu_mails'] ) === 2, $target );
-t( 'a bulk action skips anyone not waiting', ( $q['clu_skipped'] ?? 0 ) == 3 && in_array( 'subscriber', get_userdata( $plain )->roles, true ) && user_can( 1, 'manage_options' ), $target );
+t( 'a bulk action skips anyone not waiting', ( $q['clu_skipped'] ?? 0 ) == 3 && in_array( 'subscriber', get_userdata( $plain )->roles, true ) && user_can( CLU_TEST_ADMIN, 'manage_options' ), $target );
 wp_set_current_user( 0 );
 
 $u5 = make_user( 'clu_d5', 'clu-d5@example.test', 'Start1!pass', pending_role() );
@@ -772,11 +799,11 @@ t( 'a % in the rejection subject is safe', last_mail() && last_mail()['subject']
 delete_option( 'clu_messages' );
 
 reset_state();
-wp_set_current_user( 1 );
-$res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => 'rejected_user', 'approved_role' => 'approved_user' ], 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
+$res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => 'rejected_user', 'approved_role' => 'approved_user' ], CLU_TEST_ADMIN );
 t( 'the rejected role cannot be the pending role', empty( $res['success'] ), msg( $res ) );
-wp_set_current_user( 1 );
-$res = ajax( 'clu_delete_role', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'role_slug' => 'rejected_user' ], 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
+$res = ajax( 'clu_delete_role', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'role_slug' => 'rejected_user' ], CLU_TEST_ADMIN );
 t( 'the rejected role cannot be deleted', empty( $res['success'] ) && get_role( 'rejected_user' ), msg( $res ) );
 ob_start();
 clu_render_roles_tab();
@@ -804,7 +831,7 @@ t( 'it follows deleted users', clu_get_pending_count() === 0, (string) clu_get_p
 $res = register( [ 'email' => 'clu-count3@example.test' ] );
 $GLOBALS['menu']    = [ 70 => [ 'Users', 'list_users', 'users.php', '', 'menu-top', 'menu-users', 'dashicons-admin-users' ] ];
 $GLOBALS['submenu'] = [];
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 clu_add_pending_menu();
 t( 'the Users menu shows the count', strpos( $GLOBALS['menu'][70][0], 'awaiting-mod' ) !== false && strpos( $GLOBALS['menu'][70][0], '>1<' ) !== false, $GLOBALS['menu'][70][0] );
 $sub = end( $GLOBALS['submenu']['users.php'] ) ?: [];
@@ -821,9 +848,9 @@ section( '17. Register fields' );
 
 /** Saves a field list through the settings screen's handler. */
 function save_fields( $rows ) {
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     $nonce = wp_create_nonce( 'clu_register_fields_nonce' );
-    $res   = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => wp_json_encode( $rows ) ], 1 );
+    $res   = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => wp_json_encode( $rows ) ], CLU_TEST_ADMIN );
     wp_set_current_user( 0 );
     return $res;
 }
@@ -990,9 +1017,9 @@ wp_set_current_user( $subscriber );
 $nonce = wp_create_nonce( 'clu_register_fields_nonce' );
 $res = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => '[]' ], $subscriber );
 t( 'a subscriber cannot save fields', empty( $res['success'] ), msg( $res ) );
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 $nonce = wp_create_nonce( 'clu_register_fields_nonce' );
-$res = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => 'not json' ], 1 );
+$res = ajax( 'clu_save_register_fields', [ 'nonce' => $nonce, 'fields' => 'not json' ], CLU_TEST_ADMIN );
 t( 'broken data is refused', empty( $res['success'] ) && empty( $res['not_json'] ), msg( $res ) );
 wp_set_current_user( 0 );
 
@@ -1073,7 +1100,7 @@ save_fields( all_rows( [ 'region' => [ 'enabled' => false ], 'country' => [ 'ena
 if ( $bare ) {
     $ad = make_user( 'clu_ad', 'clu-ad@example.test', 'Start1!pass', 'subscriber' );
     update_user_meta( $ad, 'country', 'France' );
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     $html = clu_get_template_html( 'user_extra_fields', get_userdata( $ad ) );
     t( 'the user screen shows the fields on the form', strpos( $html, 'name="clu_field_notes"' ) !== false && strpos( $html, 'name="company"' ) !== false );
     t( 'a field turned off shows only where there is a value', strpos( $html, 'name="country"' ) !== false && strpos( $html, 'name="region"' ) === false );
@@ -1101,7 +1128,7 @@ if ( $bare ) {
 }
 
 ob_start();
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 clu_render_register_fields_tab();
 $tab = ob_get_clean();
 wp_set_current_user( 0 );
@@ -1232,7 +1259,7 @@ t( 'the login page from the settings is used', strpos( $target, '/my-login/' ) !
 delete_option( 'clu_pages_url' );
 
 t( 'an approved user gets in', visit( $page_id, $appr ) === 'open' );
-t( 'an administrator gets in', visit( $page_id, 1 ) === 'open' );
+t( 'an administrator gets in', visit( $page_id, CLU_TEST_ADMIN ) === 'open' );
 t( 'an editor of the page gets in', visit( $page_id, $edit ) === 'open' );
 t( 'a subscriber does not', visit( $page_id, $subs ) === 'denied' );
 t( '...and sees the message, not the content', strpos( (string) ( $GLOBALS['clu_die']['message'] ?? '' ), 'approved users only' ) !== false && strpos( (string) ( $GLOBALS['clu_die']['message'] ?? '' ), $secret ) === false );
@@ -1266,12 +1293,17 @@ $found = function ( $user_id, $args = [] ) use ( $secret ) {
     wp_set_current_user( 0 );
     return $query->posts;
 };
-t( 'search does not show a restricted page to a visitor', ! in_array( $page_id, $found( 0 ), true ) && in_array( $open_id, $found( 0 ), true ) );
-t( 'nor to a subscriber', ! in_array( $page_id, $found( $subs ), true ) );
-t( 'an approved user finds it', in_array( $page_id, $found( $appr ), true ) );
-update_post_meta( $open_id, 'clu_other', '1' );
-$narrowed = $found( 0, [ 'meta_query' => [ 'relation' => 'OR', [ 'key' => 'clu_other', 'value' => '1' ], [ 'key' => 'clu_nothing', 'value' => '1' ] ] ] );
-t( 'a query with its own meta conditions keeps them', $narrowed === [ $open_id ], implode( ',', $narrowed ) );
+if ( ! in_array( $open_id, $found( 0 ), true ) ) {
+    // Some sites change search, for example to pages with a view count only.
+    skip( 'search', 'the site\'s own search does not find a new open page either' );
+} else {
+    t( 'search does not show a restricted page to a visitor', ! in_array( $page_id, $found( 0 ), true ) );
+    t( 'nor to a subscriber', ! in_array( $page_id, $found( $subs ), true ) );
+    t( 'an approved user finds it', in_array( $page_id, $found( $appr ), true ) );
+    update_post_meta( $open_id, 'clu_other', '1' );
+    $narrowed = $found( 0, [ 'meta_query' => [ 'relation' => 'OR', [ 'key' => 'clu_other', 'value' => '1' ], [ 'key' => 'clu_nothing', 'value' => '1' ] ] ] );
+    t( 'a query with its own meta conditions keeps them', $narrowed === [ $open_id ], implode( ',', $narrowed ) );
+}
 
 $rest = function ( $route, $params = [], $user_id = 0 ) {
     wp_set_current_user( $user_id );
@@ -1345,22 +1377,22 @@ $save = function ( $post, $id, $user_id ) {
     wp_set_current_user( 0 );
 };
 $box = make_page( 'Box', 'x', false );
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 $nonce = wp_create_nonce( 'clu_save_access' );
 wp_set_current_user( $subs );
 $subs_nonce = wp_create_nonce( 'clu_save_access' );
 wp_set_current_user( 0 );
-$save( [ 'clu_restricted' => '1' ], $box, 1 );
+$save( [ 'clu_restricted' => '1' ], $box, CLU_TEST_ADMIN );
 t( 'the box saves nothing without its nonce', get_post_meta( $box, '_clu_restricted', true ) === '' );
 $save( [ 'clu_access_nonce' => $subs_nonce, 'clu_restricted' => '1' ], $box, $subs );
 t( 'someone who cannot edit the page cannot restrict it', get_post_meta( $box, '_clu_restricted', true ) === '' );
-$save( [ 'clu_access_nonce' => $nonce, 'clu_restricted' => '1' ], $box, 1 );
+$save( [ 'clu_access_nonce' => $nonce, 'clu_restricted' => '1' ], $box, CLU_TEST_ADMIN );
 t( 'the box restricts the page', get_post_meta( $box, '_clu_restricted', true ) === '1' );
-$save( [ 'clu_something' => 'quick edit' ], $box, 1 );
+$save( [ 'clu_something' => 'quick edit' ], $box, CLU_TEST_ADMIN );
 t( 'a save from elsewhere leaves it restricted', get_post_meta( $box, '_clu_restricted', true ) === '1' );
-$save( [ 'clu_access_nonce' => $nonce ], $box, 1 );
+$save( [ 'clu_access_nonce' => $nonce ], $box, CLU_TEST_ADMIN );
 t( 'unticking opens it again', get_post_meta( $box, '_clu_restricted', true ) === '' );
-wp_set_current_user( 1 );
+wp_set_current_user( CLU_TEST_ADMIN );
 ob_start();
 clu_render_access_meta_box( get_post( $page_id ) );
 $html = ob_get_clean();
@@ -1403,7 +1435,7 @@ function wp_login_request( $get = [], $post = null, $callback = 'clu_replace_wp_
     return $result;
 }
 
-$save_replacement = function ( $enabled, $user_id = 1 ) {
+$save_replacement = function ( $enabled, $user_id = CLU_TEST_ADMIN ) {
     wp_set_current_user( $user_id );
     $res = ajax( 'clu_save_login_replacement', [ 'nonce' => wp_create_nonce( 'clu_login_replacement_nonce' ), 'enabled' => $enabled ], $user_id );
     wp_set_current_user( 0 );
@@ -1450,6 +1482,23 @@ t( 'a page without the shortcode gets a warning, since a page builder may hold t
 update_option( 'clu_pages_url', $all_pages );
 $res = $save_replacement( 1 );
 t( 'an administrator turns it on', ! empty( $res['success'] ) && empty( $res['data']['warning'] ) && clu_login_replacement_is_on(), msg( $res ) );
+
+// WPML asks for wp_login_url() while it resolves an address, as a client site showed:
+// the login link and the check of the login page must not call each other without end.
+$depth     = 0;
+$deepest   = 0;
+$like_wpml = function ( $url ) use ( &$depth, &$deepest ) {
+    $deepest = max( $deepest, ++$depth );
+    if ( $depth < 6 ) {
+        wp_login_url();
+    }
+    $depth--;
+    return $url;
+};
+add_filter( 'url_to_postid', $like_wpml );
+$link = wp_login_url( home_url( '/x/' ) );
+remove_filter( 'url_to_postid', $like_wpml );
+t( 'a plugin that asks for the login link while resolving an address causes no loop', strpos( $link, $u_login ) === 0 && $deepest === 1, 'depth ' . $deepest . ', ' . $link );
 
 t( 'the login screen goes to the login page', wp_login_request() === $u_login, wp_login_request() );
 $target = wp_login_request( [ 'redirect_to' => home_url( '/wp-admin/' ) ] );
@@ -1546,7 +1595,7 @@ $GLOBALS['clu_mails'] = [];
 $core_id = register_new_user( 'clu_core_signup', 'clu-core-signup@example.test' );
 $core    = is_wp_error( $core_id ) ? null : get_userdata( $core_id );
 t( 'a sign-up there waits for approval too', $core && clu_user_is_pending( $core ), $core ? implode( ',', $core->roles ) : 'no user' );
-t( 'the admin hears about it from the plugin', count( mails_to( get_option( 'admin_email' ) ) ) === 1 && strpos( mails_to( get_option( 'admin_email' ) )[0]['message'], 'clu-core-signup@example.test' ) !== false, print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+t( 'the admin hears about it from the plugin', count( mails_to( trim( get_option( 'admin_email' ) ) ) ) === 1 && strpos( mails_to( trim( get_option( 'admin_email' ) ) )[0]['message'], 'clu-core-signup@example.test' ) !== false, print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
 t( 'the user gets no email about a password', ! mails_to( 'clu-core-signup@example.test' ) );
 wp_set_password( 'Str0ng!Passw0rd', $core_id );
 t( 'and cannot log in until approved', is_wp_error( wp_authenticate( 'clu_core_signup', 'Str0ng!Passw0rd' ) ) );
@@ -1555,7 +1604,7 @@ $old_default = get_option( 'default_role' );
 update_option( 'default_role', pending_role() );
 $GLOBALS['clu_mails'] = [];
 $core_id = register_new_user( 'clu_core_signup2', 'clu-core-signup2@example.test' );
-t( 'a pending default role does not email the admin twice', count( mails_to( get_option( 'admin_email' ) ) ) === 1, (string) count( mails_to( get_option( 'admin_email' ) ) ) );
+t( 'a pending default role does not email the admin twice', count( mails_to( trim( get_option( 'admin_email' ) ) ) ) === 1, (string) count( mails_to( trim( get_option( 'admin_email' ) ) ) ) );
 update_option( 'default_role', $old_default );
 add_action( 'register_new_user', 'wp_send_new_user_notifications' );
 $GLOBALS['clu_mails'] = [];
@@ -1605,7 +1654,7 @@ function confirm_link_of( $email ) {
 }
 
 {
-    $admin   = get_option( 'admin_email' );
+    $admin   = trim( get_option( 'admin_email' ) );
     $p_reg   = make_page( 'C register', '[clu_register_form]', false );
     $p_login = make_page( 'C login', '[clu_login_form]', false );
     $u_reg   = get_permalink( $p_reg );
@@ -1739,7 +1788,7 @@ function confirm_link_of( $email ) {
     $email = 'clu-confirm-approve@example.test';
     register( [ 'email' => $email ] );
     $u = get_user_by( 'email', $email );
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     $GLOBALS['clu_mails'] = [];
     $r = clu_decide_user( $u->ID, 'reject' );
     t( 'an unconfirmed account cannot be rejected', $r === 'skipped' && clu_user_is_unconfirmed( get_userdata( $u->ID ) ) && ! $GLOBALS['clu_mails'], $r );
@@ -1795,13 +1844,13 @@ function confirm_link_of( $email ) {
     t( 'with neither, on a page of its own', $to === 'page: ' . $plain( 'email_confirm_invalid' ), $to );
 
     // Settings.
-    wp_set_current_user( 1 );
-    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => 'unconfirmed_user', 'approved_role' => approved_role() ], 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => 'unconfirmed_user', 'approved_role' => approved_role() ], CLU_TEST_ADMIN );
     t( 'the Unconfirmed User role cannot be chosen as the pending role', empty( $res['success'] ) && clu_get_role_slug( 'pending_role' ) === 'pending_user', msg( $res ) );
-    wp_set_current_user( 1 );
-    $res = ajax( 'clu_delete_role', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'role_slug' => 'unconfirmed_user' ], 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    $res = ajax( 'clu_delete_role', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'role_slug' => 'unconfirmed_user' ], CLU_TEST_ADMIN );
     t( 'nor deleted', empty( $res['success'] ) && get_role( 'unconfirmed_user' ), msg( $res ) );
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     ob_start();
     clu_render_roles_tab();
     $tab = ob_get_clean();
@@ -1891,6 +1940,17 @@ section( '25. Login protection' );
     remove_filter( 'clu_login_limit', $filter );
     delete_transient( clu_login_lock_key() );
 
+    // A second login step, such as a code from a two-factor plugin.
+    $second   = function ( $url, $user ) { return $user->user_login === 'clu_lp' ? 'https://example.test/second-step' : $url; };
+    $sessions = count( WP_Session_Tokens::get_instance( $lp )->get_all() );
+    add_filter( 'clu_second_step_url', $second, 10, 2 );
+    $res = login( 'clu_lp', 'Start1!pass' );
+    remove_filter( 'clu_second_step_url', $second, 10 );
+    t( 'a user with a second login step is sent on to it', ! empty( $res['success'] ) && ( $res['data']['redirect'] ?? '' ) === 'https://example.test/second-step' && msg( $res ) === $plain( 'login_second_step' ), msg( $res ) );
+    t( 'and the session that the password began is ended', count( WP_Session_Tokens::get_instance( $lp )->get_all() ) === $sessions );
+    $res = login( 'clu_lp', 'Start1!pass' );
+    t( 'a user without one logs in as usual', ! empty( $res['success'] ) && ( $res['data']['redirect'] ?? '' ) !== 'https://example.test/second-step' && count( WP_Session_Tokens::get_instance( $lp )->get_all() ) === $sessions + 1 );
+
     // The current password on My Account.
     $acc     = make_user( 'clu_lp_acc', 'clu-lp-acc@example.test', 'Start1!pass', approved_role() );
     $profile = function ( $over ) use ( $acc ) {
@@ -1976,7 +2036,7 @@ section( '25. Login protection' );
     $service = null;
     $res     = login( 'clu_lp', 'Start1!pass', [ 'cf-turnstile-response' => 'token-5' ] );
     t( 'when the service cannot be reached, the login goes through', ! empty( $res['success'] ), msg( $res ) );
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     ob_start();
     clu_show_captcha_problem();
     $notice = ob_get_clean();
@@ -2071,12 +2131,12 @@ reset_state();
 section( '26. Per site: templates, automatic approval, languages' );
 {
     $plain = function ( $key ) { return trim( wp_strip_all_tags( clu_get_message( $key ) ) ); };
-    $admin = get_option( 'admin_email' );
+    $admin = trim( get_option( 'admin_email' ) );
 
     // Templates from the theme.
     $dir = wp_normalize_path( trailingslashit( sys_get_temp_dir() ) . 'clu-theme-' . wp_generate_password( 6, false ) );
     mkdir( $dir . '/custom-login-users', 0777, true );
-    file_put_contents( $dir . '/custom-login-users/form_login.php', '<?php defined( "ABSPATH" ) || exit; ?><div class="theme-login">THEME LOGIN <?php echo esc_url( $attributes["redirect"] ); ?></div>' );
+    file_put_contents( $dir . '/custom-login-users/form_login.php', '<?php defined( "ABSPATH" ) || exit; ?><div class="theme-login">THEME LOGIN <?php echo esc_url( $attributes["redirect"] ?? "" ); ?></div>' );
     $paths_were = [ $GLOBALS['wp_stylesheet_path'] ?? null, $GLOBALS['wp_template_path'] ?? null ];
     $GLOBALS['wp_stylesheet_path'] = $dir;
     $GLOBALS['wp_template_path']   = $dir;
@@ -2142,18 +2202,18 @@ section( '26. Per site: templates, automatic approval, languages' );
     t( 'a sign-up on the form built into WordPress is approved too', ! is_wp_error( $core_id ) && in_array( approved_role(), get_userdata( $core_id )->roles, true ) && count( mails_to( 'clu-auto-core@example.test' ) ) === 1 );
 
     t( 'users already waiting stay in the list', clu_user_is_pending( get_userdata( $waiting ) ) );
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     $by_admin = make_user( 'clu_auto_by_admin', 'clu-auto-by-admin@example.test', 'Start1!pass', pending_role() );
     wp_set_current_user( 0 );
     t( 'an account an admin makes in the pending role stays pending', clu_user_is_pending( get_userdata( $by_admin ) ) );
 
-    wp_set_current_user( 1 );
-    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => pending_role(), 'approved_role' => approved_role(), 'auto_approve' => '' ], 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => pending_role(), 'approved_role' => approved_role(), 'auto_approve' => '' ], CLU_TEST_ADMIN );
     t( 'the User Roles tab turns it off', ! empty( $res['success'] ) && ! clu_auto_approve_is_on(), msg( $res ) );
-    wp_set_current_user( 1 );
-    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => pending_role(), 'approved_role' => approved_role(), 'auto_approve' => '1' ], 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => pending_role(), 'approved_role' => approved_role(), 'auto_approve' => '1' ], CLU_TEST_ADMIN );
     t( 'and on', ! empty( $res['success'] ) && clu_auto_approve_is_on(), msg( $res ) );
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     ob_start();
     clu_render_roles_tab();
     $tab = ob_get_clean();
@@ -2169,8 +2229,12 @@ section( '26. Per site: templates, automatic approval, languages' );
     t( 'the tests run in English', get_locale() === 'en_US' && clu_get_message( 'login_failed' ) === 'The username, email or password is incorrect.' );
     $hebrew_ok = switch_to_locale( 'he_IL' );
 
-    if ( ! $hebrew_ok ) {
-        t( 'Hebrew can be tested here (WordPress in Hebrew must be installed)', false, 'switch_to_locale(he_IL) failed' );
+    if ( $hebrew_ok && __( 'Login successful!', 'custom-login-users' ) === 'Login successful!' ) {
+        restore_previous_locale();
+        $hebrew_ok = false;
+        skip( 'Hebrew', 'another plugin, such as WPML, sets the language on this site' );
+    } elseif ( ! $hebrew_ok ) {
+        skip( 'Hebrew', 'WordPress in Hebrew is not installed on this site' );
     } else {
         $hebrew = clu_default_messages();
         t( 'in Hebrew the messages come in Hebrew', clu_get_message( 'login_failed' ) === 'שם המשתמש, האימייל או הסיסמה שגויים.', clu_get_message( 'login_failed' ) );
@@ -2218,9 +2282,31 @@ section( '26. Per site: templates, automatic approval, languages' );
         t( 'the admin email goes in the site\'s language', count( $m ) === 1 && strpos( $m[0]['subject'], 'Website: New registration' ) === 0 && strpos( $m[0]['message'], 'dir="rtl"' ) === false );
     }
 
+    // Texts saved as they were by version 1.0, which saved every default.
+    update_option( 'clu_messages', [
+        'notify_client_body'    => "Hello,\n{display_name} has registered on the website.\nTo approve the registration, click the link below and change the user role from \"Pending User\" to \"Approved User\": {edit_user_link}\n",
+        'password_special_char' => 'Password must contain at least one special character (!@#$%^&amp;*().',
+        'already_logged_in'     => "You are already logged in.\nTo log out click here: <a style=\"color:#333;\" href=\"{logout_url}\">Logout</a>",
+        'reset_email_body'      => 'Hello %1$s, this one an admin wrote.',
+    ] );
+    t( 'the admin email that 1.0 saved gives way to the current one', strpos( clu_get_message( 'notify_client_body' ), '{user_details}' ) !== false );
+    t( 'so does the old password rule, saved with its typo and an &amp;', clu_get_message( 'password_special_char' ) === $english['password_special_char'] );
+    t( 'and a default saved with other line breaks', clu_get_message( 'already_logged_in' ) === $english['already_logged_in'] );
+    t( 'a text an admin wrote stays', clu_get_message( 'reset_email_body' ) === 'Hello %1$s, this one an admin wrote.' );
+    if ( $hebrew_ok && switch_to_locale( 'he_IL' ) ) {
+        t( 'on a site in Hebrew those 1.0 texts show in Hebrew', clu_get_message( 'notify_client_body' ) === clu_default_messages()['notify_client_body'] && strpos( clu_get_message( 'notify_client_body' ), 'שלום' ) === 0 );
+        restore_previous_locale();
+    }
+    update_option( 'clu_messages', [ 'already_logged_in' => '<p>You are already logged in.</p><p>To log out click here: <a href="https://example.test/out">Logout</a></p>' ] );
+    t( 'a default whose link an admin changed counts as changed', strpos( clu_get_message( 'already_logged_in' ), 'https://example.test/out' ) !== false );
+    update_option( 'clu_password_reset_form', [ 'renew_password' => clu_legacy_defaults()['forms']['clu_password_reset_form']['renew_password'][0] ] );
+    t( 'a form text saved by 1.0 shows the current default', clu_form_text( 'clu_password_reset_form', 'renew_password' ) === clu_form_text_defaults()['clu_password_reset_form']['renew_password'] );
+    delete_option( 'clu_messages' );
+    delete_option( 'clu_password_reset_form' );
+
     // Saving does not store the defaults.
-    wp_set_current_user( 1 );
-    $res   = ajax( 'clu_save_messages', [ 'nonce' => wp_create_nonce( 'clu_messages_nonce' ), 'login_failed' => $english['login_failed'], 'login_success' => 'Welcome back' ], 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    $res   = ajax( 'clu_save_messages', [ 'nonce' => wp_create_nonce( 'clu_messages_nonce' ), 'login_failed' => $english['login_failed'], 'login_success' => 'Welcome back' ], CLU_TEST_ADMIN );
     $saved = get_option( 'clu_messages' );
     t( 'saving the Messages tab stores only what was changed', ! empty( $res['success'] ) && $saved === [ 'login_success' => 'Welcome back' ], print_r( $saved, true ) );
     if ( ! function_exists( 'add_settings_section' ) ) {
@@ -2324,8 +2410,16 @@ section( '27. Nonces, templates, settings, update and uninstall' );
     t( 'the version is recorded', get_option( 'clu_db_version' ) === CLU_VERSION );
 
 
-    wp_set_current_user( 1 );
+    wp_set_current_user( CLU_TEST_ADMIN );
     delete_option( 'clu_pages_url' );
+    // The site's own pages with these addresses move aside first, as on a site that has none.
+    foreach ( [ 'set-password', 'password-lost' ] as $slug ) {
+        $existing = get_page_by_path( $slug );
+        if ( $existing ) {
+            $wpdb->update( $wpdb->posts, [ 'post_name' => $slug . '-moved-by-test' ], [ 'ID' => $existing->ID ] );
+            clean_post_cache( $existing->ID );
+        }
+    }
     wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish', 'post_name' => 'set-password', 'post_title' => 'Taken', 'post_content' => 'No form here' ] );
     wp_insert_post( [ 'post_type' => 'page', 'post_status' => 'publish', 'post_name' => 'password-lost', 'post_title' => 'Old', 'post_content' => '[custom-password-lost-form]' ] );
     foreach ( [ 'login', 'register', 'my-account', 'logged-out', 'password-updated' ] as $slug ) {
@@ -2336,7 +2430,7 @@ section( '27. Nonces, templates, settings, update and uninstall' );
         }
     }
     wp_cache_flush();
-    $res = ajax( 'clu_create_pages', [ 'nonce' => wp_create_nonce( 'clu_create_pages_nonce' ) ], 1 );
+    $res = ajax( 'clu_create_pages', [ 'nonce' => wp_create_nonce( 'clu_create_pages_nonce' ) ], CLU_TEST_ADMIN );
     $by_slug = [];
     foreach ( $res['data']['results'] ?? [] as $row ) {
         $by_slug[ $row['slug'] ] = $row;
@@ -2385,7 +2479,7 @@ t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", arra
 
 $wpdb->query( 'ROLLBACK' );
 $r = $GLOBALS['clu_results'];
-fwrite( STDOUT, "\n" . str_repeat( '=', 60 ) . "\nPASS {$r['pass']}   FAIL {$r['fail']}\n" );
+fwrite( STDOUT, "\n" . str_repeat( '=', 60 ) . "\nPASS {$r['pass']}   FAIL {$r['fail']}" . ( ! empty( $r['skip'] ) ? "   SKIPPED {$r['skip']}" : '' ) . "\n" );
 while ( ob_get_level() ) {
     ob_end_clean();
 }

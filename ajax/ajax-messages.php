@@ -33,7 +33,7 @@ function clu_save_messages_handler() {
 
             // A default left as it was is not stored, so that it keeps following the
             // site's language and later versions.
-            if ( $value !== '' && $value !== $defaults[ $key ] && $value !== ( $english[ $key ] ?? '' ) ) {
+            if ( clu_is_custom_text( $value, $english[ $key ] ?? '', [ $defaults[ $key ] ] ) ) {
                 $saved[ $key ] = $value;
             }
         }

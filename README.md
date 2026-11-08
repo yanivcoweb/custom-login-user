@@ -3,7 +3,7 @@
 A WordPress plugin that adds front-end pages for login, registration, password reset and account details, with an admin approval step for new users.
 
 **Author:** Yaniv Sasson
-**Version:** 1.7.0
+**Version:** 1.7.1
 
 ---
 
@@ -100,6 +100,10 @@ Both are off by default, on the **Login Protection** tab.
 - If the service cannot be reached, or refuses the secret key later, forms are let through without the check and admins see a notice in wp-admin. A bot can cause neither, and refusing everyone would lock the admins out too
 - If a wrong site key ever locks you out, rename the plugin's folder over FTP to turn it off
 
+**Two-factor plugins.** With the Two Factor plugin, a user who has a second step is taken from this plugin's login form to its code page, and is logged in once the code is right. It works with Replace wp-login.php on as well. Another two-factor plugin can do the same through the `clu_second_step_url` filter; until then, its users log in on the default form at `/wp-login.php?clu_native=1`.
+
+**Page caches.** Pages with restricted content, whole or in part, are kept out of page caches: with WP Super Cache on, none of their text reached its cache. A form on a cached page whose security key has grown old renews the key by itself and sends again.
+
 **Changing the email address.** On My Account a field for the current password appears once the email address is changed, and the change is refused without it. A new address is the way to take over an account, through a password reset sent there, so a stolen session alone is not enough. WordPress also emails the old address about the change.
 
 ---
@@ -174,9 +178,10 @@ What this does not cover:
 
 The default texts of the forms, the messages and the emails follow the site's language, under **Settings > General**. The plugin comes with Hebrew.
 
-- A text you wrote in the settings stays as you wrote it. A text left at its default, including one saved as it was by an older version, shows in the site's language
+- A text you wrote in the settings stays as you wrote it. A text left at its default, including one an older version saved as it was, shows in the site's language. Texts are compared by their words, so a default that version 1.0 saved with other line breaks counts as a default too
 - Emails go in the language of whoever gets them: the user's own language if they chose one in their profile, or the site's. In a right-to-left language the email is right to left too
 - The settings screen itself stays in English
+- On a site with WPML, WPML decides the language of each request, emails included
 - The country and region lists, and the choices of Customer Type, stay in English
 
 **Another language:** copy `languages/custom-login-users.pot`, translate it with Poedit or Loco Translate, and put the files in `wp-content/languages/plugins`, where an update does not touch them. A file there comes before the plugin's own.
@@ -243,6 +248,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 | `clu_send_received_email` | Decide whether a user gets the registration received email. Receives the Mail tab setting and the user |
 | `clu_email_confirm_lifetime` | Seconds a link that confirms an email address stays valid |
 | `clu_login_limit` | The limit on failed logins: an array with `on`, `attempts`, and `window` in seconds |
+| `clu_second_step_url` | Where a user's second login step takes place, for a two-factor plugin other than Two Factor. Receives the address, the user and where to go after; '' means none |
 | `clu_template_path` | The file a form is rendered from. Receives the path and the template name, such as `form_login` |
 | `clu_region_countries` | The regions and countries of the Region and Country fields |
 | `clu_user_can_view_restricted` | Decide who sees restricted content, for example to let in a role that was on the site before the approval flow. Receives the answer, the user and the post ID, which is 0 for restricted content in general |
@@ -274,6 +280,22 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.7.1
+
+Before updating a live site
+
+- On a site updated from version 1.0, texts that 1.0 saved as they were now show the current wording, for example the email to the admin, which gains the registration details and the link to the users waiting. Texts written by hand stay as they are.
+
+Fixed
+
+- Version 1.0 saved every default text along with the ones an admin changed, often with other line breaks. Those saved defaults kept showing after an update, such as the old email to the admin, without the registration details and the link to the users waiting. They now give way to the current defaults, and to the site's language. Texts an admin wrote stay. Found by updating copies of two client sites.
+- On a site with WPML, turning on Replace wp-login.php made every page with a login link hang: WPML asks for the login link while it resolves an address, and the plugin resolved the address of the login page to build that link, so the two called each other without end. Found on a copy of a client site.
+- A user with a second login step in the Two Factor plugin could not log in through this plugin's form: Two Factor printed its code page into the form's answer, and the form showed a network error. Such a user now goes on to the code page.
+- When no address is set on the Mail tab, the site admin address is trimmed before the email goes to it.
+- The tests run on a copy of any site: they act as its first administrator, leave out a copy of the plugin the site has installed, and skip what the site cannot run, such as Hebrew when WordPress in Hebrew is not installed.
+
+Tested by updating copies of two client sites from version 1.0, with their themes and plugins, on PHP 8.2; next to Two Factor and WP Super Cache; and on PHP 8.4 and 8.5.
 
 ### 1.7.0
 

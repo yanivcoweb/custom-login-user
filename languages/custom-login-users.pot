@@ -2,14 +2,14 @@
 # This file is distributed under the same license as the Custom Login Users plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: Custom Login Users 1.7.0\n"
+"Project-Id-Version: Custom Login Users 1.7.1\n"
 "Report-Msgid-Bugs-To: https://github.com/yanivcoweb/custom-login-user/issues\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-08T10:11:58+00:00\n"
+"POT-Creation-Date: 2026-11-08T12:07:54+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: custom-login-users\n"
@@ -159,7 +159,7 @@ msgid "Register Now"
 msgstr ""
 
 #: options-page/arrays/array_register_form.php:16
-#: src/messages-helper.php:151
+#: src/messages-helper.php:183
 msgid "Register"
 msgstr ""
 
@@ -236,221 +236,225 @@ msgstr ""
 msgid "Custom Login Users could not use the bot check (%s), so forms are let through without it. Check the keys on the Login Protection tab."
 msgstr ""
 
-#: src/messages-helper.php:89
+#: src/messages-helper.php:120
 msgid "Invalid request."
 msgstr ""
 
-#: src/messages-helper.php:90
+#: src/messages-helper.php:121
 msgid "An error occurred. Please try again later."
 msgstr ""
 
-#: src/messages-helper.php:91
+#: src/messages-helper.php:122
 msgid "Too many attempts. Please try again later."
 msgstr ""
 
-#: src/messages-helper.php:92
+#: src/messages-helper.php:123
 msgid "Processing..."
 msgstr ""
 
-#: src/messages-helper.php:95
+#: src/messages-helper.php:126
 msgid "Login successful!"
 msgstr ""
 
-#: src/messages-helper.php:96
-msgid "The username, email or password is incorrect."
-msgstr ""
-
-#: src/messages-helper.php:98
-msgid "Too many failed login attempts. Please try again in {minutes} minutes."
-msgstr ""
-
-#: src/messages-helper.php:99
-msgid "Please confirm that you are not a robot, and try again."
-msgstr ""
-
-#: src/messages-helper.php:100
-msgid "Your account is awaiting approval. We will email you as soon as it is approved."
-msgstr ""
-
-#: src/messages-helper.php:101
-msgid "Your registration was not approved."
-msgstr ""
-
-#: src/messages-helper.php:102
-msgid "Please confirm your email address first, through the link we emailed you."
-msgstr ""
-
-#: src/messages-helper.php:105
-#: src/messages-helper.php:161
-msgid "Please fill in all required fields."
-msgstr ""
-
-#: src/messages-helper.php:107
-msgid "Please check this field: {field}"
-msgstr ""
-
-#: src/messages-helper.php:108
-msgid "This email address is already registered."
-msgstr ""
-
-#: src/messages-helper.php:109
-msgid "Thank you for registering! We will email you as soon as your account is approved."
-msgstr ""
-
-#: src/messages-helper.php:110
-msgid "Thank you for registering! We have emailed you a link to set your password."
-msgstr ""
-
-#: src/messages-helper.php:111
-msgid "Thank you for registering! To complete it, please click the link we emailed you to confirm your email address."
-msgstr ""
-
-#: src/messages-helper.php:112
-msgid "We could not send the confirmation email. Please try again later."
-msgstr ""
-
-#: src/messages-helper.php:115
-msgid "Please enter your email address."
-msgstr ""
-
-#: src/messages-helper.php:116
-msgid "Failed to send the reset email. Please try again later."
-msgstr ""
-
-#: src/messages-helper.php:117
-msgid "If an account matches what you entered, a password reset email is on its way. Please check your inbox."
-msgstr ""
-
-#: src/messages-helper.php:120
-msgid "Missing required fields."
-msgstr ""
-
-#: src/messages-helper.php:121
-#: src/messages-helper.php:140
-msgid "The password reset link is invalid or has expired."
-msgstr ""
-
-#: src/messages-helper.php:123
-msgid "Password must be at least {min_length} characters long."
-msgstr ""
-
-#: src/messages-helper.php:124
-msgid "Password must contain at least one uppercase letter (A-Z)."
-msgstr ""
-
-#: src/messages-helper.php:125
-msgid "Password must contain at least one lowercase letter (a-z)."
-msgstr ""
-
-#: src/messages-helper.php:126
-msgid "Password must contain at least one number (0-9)."
-msgstr ""
-
 #: src/messages-helper.php:127
-msgid "Password must contain at least one special character (such as ! @ # $ %)."
+msgid "Please continue to the second step of your login."
 msgstr ""
 
 #: src/messages-helper.php:128
-msgid "Your password has been reset successfully."
+msgid "The username, email or password is incorrect."
+msgstr ""
+
+#: src/messages-helper.php:130
+msgid "Too many failed login attempts. Please try again in {minutes} minutes."
+msgstr ""
+
+#: src/messages-helper.php:131
+msgid "Please confirm that you are not a robot, and try again."
 msgstr ""
 
 #: src/messages-helper.php:132
-msgid "<p>You are already logged in.</p><p>To log out click here: <a style=\"color:#333;\" href=\"{logout_url}\">Logout</a></p>"
+msgid "Your account is awaiting approval. We will email you as soon as it is approved."
 msgstr ""
 
-#: src/messages-helper.php:135
-msgid "You are already logged in."
+#: src/messages-helper.php:133
+msgid "Your registration was not approved."
 msgstr ""
 
-#: src/messages-helper.php:136
-msgid "Registration is currently disabled."
+#: src/messages-helper.php:134
+msgid "Please confirm your email address first, through the link we emailed you."
+msgstr ""
+
+#: src/messages-helper.php:137
+#: src/messages-helper.php:193
+msgid "Please fill in all required fields."
 msgstr ""
 
 #: src/messages-helper.php:139
-msgid "The password reset link is invalid."
+msgid "Please check this field: {field}"
+msgstr ""
+
+#: src/messages-helper.php:140
+msgid "This email address is already registered."
+msgstr ""
+
+#: src/messages-helper.php:141
+msgid "Thank you for registering! We will email you as soon as your account is approved."
+msgstr ""
+
+#: src/messages-helper.php:142
+msgid "Thank you for registering! We have emailed you a link to set your password."
 msgstr ""
 
 #: src/messages-helper.php:143
-msgid "Thank you, your email address is confirmed. We will email you as soon as your account is approved."
+msgid "Thank you for registering! To complete it, please click the link we emailed you to confirm your email address."
 msgstr ""
 
 #: src/messages-helper.php:144
-msgid "Thank you, your email address is confirmed. We have emailed you a link to set your password."
+msgid "We could not send the confirmation email. Please try again later."
 msgstr ""
 
-#: src/messages-helper.php:145
-msgid "Your email address is already confirmed."
+#: src/messages-helper.php:147
+msgid "Please enter your email address."
 msgstr ""
 
-#: src/messages-helper.php:146
-msgid "This confirmation link is invalid or has expired. To get a new one, register again with the same email address."
+#: src/messages-helper.php:148
+msgid "Failed to send the reset email. Please try again later."
 msgstr ""
 
 #: src/messages-helper.php:149
-msgid "Logout"
+msgid "If an account matches what you entered, a password reset email is on its way. Please check your inbox."
 msgstr ""
 
-#: src/messages-helper.php:150
-msgid "Login"
+#: src/messages-helper.php:152
+msgid "Missing required fields."
+msgstr ""
+
+#: src/messages-helper.php:153
+#: src/messages-helper.php:172
+msgid "The password reset link is invalid or has expired."
 msgstr ""
 
 #: src/messages-helper.php:155
-msgid "This content is for approved users. Please <a href=\"{login_url}\">log in</a> to see it."
+msgid "Password must be at least {min_length} characters long."
 msgstr ""
 
 #: src/messages-helper.php:156
-msgid "This content is for approved users only."
+msgid "Password must contain at least one uppercase letter (A-Z)."
+msgstr ""
+
+#: src/messages-helper.php:157
+msgid "Password must contain at least one lowercase letter (a-z)."
+msgstr ""
+
+#: src/messages-helper.php:158
+msgid "Password must contain at least one number (0-9)."
 msgstr ""
 
 #: src/messages-helper.php:159
-msgid "You must be logged in to view this page."
+msgid "Password must contain at least one special character (such as ! @ # $ %)."
 msgstr ""
 
 #: src/messages-helper.php:160
-msgid "Your profile has been updated successfully."
-msgstr ""
-
-#: src/messages-helper.php:162
-msgid "This email address is already in use by another account."
-msgstr ""
-
-#: src/messages-helper.php:163
-msgid "Your password has been changed successfully."
+msgid "Your password has been reset successfully."
 msgstr ""
 
 #: src/messages-helper.php:164
-msgid "The current password you entered is incorrect."
+msgid "<p>You are already logged in.</p><p>To log out click here: <a style=\"color:#333;\" href=\"{logout_url}\">Logout</a></p>"
 msgstr ""
 
-#: src/messages-helper.php:165
-msgid "To change your email address, please enter your current password."
+#: src/messages-helper.php:167
+msgid "You are already logged in."
 msgstr ""
 
-#: src/messages-helper.php:166
-msgid "The new passwords do not match."
-msgstr ""
-
-#: src/messages-helper.php:169
-msgid "Link"
-msgstr ""
-
-#: src/messages-helper.php:170
-msgid "Edit User"
+#: src/messages-helper.php:168
+msgid "Registration is currently disabled."
 msgstr ""
 
 #: src/messages-helper.php:171
-msgid "Users awaiting approval"
+msgid "The password reset link is invalid."
 msgstr ""
 
-#: src/messages-helper.php:172
-msgid "Confirm my email address"
+#: src/messages-helper.php:175
+msgid "Thank you, your email address is confirmed. We will email you as soon as your account is approved."
 msgstr ""
 
 #: src/messages-helper.php:176
-msgid "Password Reset Request"
+msgid "Thank you, your email address is confirmed. We have emailed you a link to set your password."
 msgstr ""
 
 #: src/messages-helper.php:177
+msgid "Your email address is already confirmed."
+msgstr ""
+
+#: src/messages-helper.php:178
+msgid "This confirmation link is invalid or has expired. To get a new one, register again with the same email address."
+msgstr ""
+
+#: src/messages-helper.php:181
+msgid "Logout"
+msgstr ""
+
+#: src/messages-helper.php:182
+msgid "Login"
+msgstr ""
+
+#: src/messages-helper.php:187
+msgid "This content is for approved users. Please <a href=\"{login_url}\">log in</a> to see it."
+msgstr ""
+
+#: src/messages-helper.php:188
+msgid "This content is for approved users only."
+msgstr ""
+
+#: src/messages-helper.php:191
+msgid "You must be logged in to view this page."
+msgstr ""
+
+#: src/messages-helper.php:192
+msgid "Your profile has been updated successfully."
+msgstr ""
+
+#: src/messages-helper.php:194
+msgid "This email address is already in use by another account."
+msgstr ""
+
+#: src/messages-helper.php:195
+msgid "Your password has been changed successfully."
+msgstr ""
+
+#: src/messages-helper.php:196
+msgid "The current password you entered is incorrect."
+msgstr ""
+
+#: src/messages-helper.php:197
+msgid "To change your email address, please enter your current password."
+msgstr ""
+
+#: src/messages-helper.php:198
+msgid "The new passwords do not match."
+msgstr ""
+
+#: src/messages-helper.php:201
+msgid "Link"
+msgstr ""
+
+#: src/messages-helper.php:202
+msgid "Edit User"
+msgstr ""
+
+#: src/messages-helper.php:203
+msgid "Users awaiting approval"
+msgstr ""
+
+#: src/messages-helper.php:204
+msgid "Confirm my email address"
+msgstr ""
+
+#: src/messages-helper.php:208
+msgid "Password Reset Request"
+msgstr ""
+
+#: src/messages-helper.php:209
 msgid ""
 "Hello {display_name},\n"
 "\n"
@@ -462,60 +466,60 @@ msgid ""
 msgstr ""
 
 #. translators: %s: the user's name. {display_name} works too.
-#: src/messages-helper.php:181
+#: src/messages-helper.php:213
 msgid "Website: Please confirm your email address"
 msgstr ""
 
-#: src/messages-helper.php:183
+#: src/messages-helper.php:215
 msgid "Hello {display_name},<br><br>To complete your registration, please confirm your email address:<br><br>{confirm_link}<br><br>If you did not register on our website, you can ignore this email."
 msgstr ""
 
 #. translators: %s: the user's name. {display_name} works too.
-#: src/messages-helper.php:187
+#: src/messages-helper.php:219
 msgid "Website: We received your registration"
 msgstr ""
 
-#: src/messages-helper.php:189
+#: src/messages-helper.php:221
 msgid "Hello {display_name},<br><br>Thank you for registering. We received your details, and we will email you as soon as your account is approved."
 msgstr ""
 
 #. translators: %s: the user's name. {display_name} works too.
-#: src/messages-helper.php:193
+#: src/messages-helper.php:225
 #, php-format
 msgid "Website: New registration by %s"
 msgstr ""
 
-#: src/messages-helper.php:197
+#: src/messages-helper.php:229
 msgid "Hello,<br><br>{display_name} has registered on the website.<br><br>{user_details}<br><br>To approve or reject the registration, open the list: {pending_users_link}<br><br>"
 msgstr ""
 
 #. translators: %s: the user's name. {display_name} works too.
-#: src/messages-helper.php:201
+#: src/messages-helper.php:233
 #, php-format
 msgid "Website: New user %s"
 msgstr ""
 
-#: src/messages-helper.php:203
+#: src/messages-helper.php:235
 msgid "Hello,<br><br>{display_name} has registered on the website and was approved automatically.<br><br>{user_details}<br><br>To see the user: {edit_user_link}<br><br>"
 msgstr ""
 
 #. translators: %s: the user's name. {display_name} works too.
-#: src/messages-helper.php:207
+#: src/messages-helper.php:239
 #, php-format
 msgid "Website: Account approved for %s"
 msgstr ""
 
-#: src/messages-helper.php:209
+#: src/messages-helper.php:241
 msgid "Hello,<br><br>{display_name}, your account has been approved!<br><br>To set your password and access your account, click the following link:<br><br>{set_password_link}<br><br>If you have any questions, please contact us.<br><br>Thank you."
 msgstr ""
 
 #. translators: %s: the user's name. {display_name} works too.
-#: src/messages-helper.php:213
+#: src/messages-helper.php:245
 #, php-format
 msgid "Website: Registration not approved for %s"
 msgstr ""
 
-#: src/messages-helper.php:215
+#: src/messages-helper.php:247
 msgid "Hello {display_name},<br><br>Thank you for your interest. We could not approve your registration.<br><br>If you think this is a mistake, please contact us."
 msgstr ""
 

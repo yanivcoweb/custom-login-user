@@ -251,9 +251,7 @@ function clu_register_settings() {
 
                             // A default left as it was is not stored, so that it keeps
                             // following the site's language.
-                            $defaults = array_filter( [ $english[ $key ] ?? '', $field['default'], $site[ $tab['option_name'] ][ $key ] ?? '' ] );
-
-                            if ( in_array( $clean[ $key ], $defaults, true ) ) {
+                            if ( ! clu_is_custom_text( $clean[ $key ], $english[ $key ] ?? '', [ $field['default'], $site[ $tab['option_name'] ][ $key ] ?? '' ] ) ) {
                                 $clean[ $key ] = '';
                             }
                         }
@@ -527,7 +525,7 @@ function clu_render_messages_tab() {
     $val = function ( $key ) use ( $defaults, $english, $saved ) {
         $value = isset( $saved[ $key ] ) ? (string) $saved[ $key ] : '';
 
-        return clu_is_custom_text( $value, $english[ $key ] ?? '' ) ? $value : ( $defaults[ $key ] ?? '' );
+        return clu_is_custom_text( $value, $english[ $key ] ?? '', clu_legacy_defaults()['messages'][ $key ] ?? [] ) ? $value : ( $defaults[ $key ] ?? '' );
     };
 
     $sections = [
@@ -538,6 +536,7 @@ function clu_render_messages_tab() {
             'form_processing'             => 'Shown while a form is being sent',
             'login_success'               => 'Login: success',
             'login_failed'                => 'Login: wrong details',
+            'login_second_step'           => 'Login: on to a second step, such as a code from a two-factor plugin',
             'login_locked'                => 'Login: refused after too many failed attempts (<code>{minutes}</code> = minutes left)',
             'captcha_failed'              => 'Bot check not passed',
             'account_pending'             => 'Account awaiting approval',

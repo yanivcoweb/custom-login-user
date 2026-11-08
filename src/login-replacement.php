@@ -13,13 +13,24 @@ defined( 'ABSPATH' ) || exit;
  * @return string
  */
 function clu_live_page_url( $key ) {
+    static $resolving = false;
+
     $url = clu_saved_page_url( $key );
 
-    if ( $url === '' ) {
+    // WPML, for one, asks for wp_login_url() while it resolves an address, and the login
+    // link asks this function again. Inside that call the answer is no page, so the link
+    // stays the default one there, instead of the two calling each other without end.
+    if ( $url === '' || $resolving ) {
         return '';
     }
 
-    $post_id = url_to_postid( $url );
+    $resolving = true;
+
+    try {
+        $post_id = url_to_postid( $url );
+    } finally {
+        $resolving = false;
+    }
 
     return $post_id && get_post_status( $post_id ) === 'publish' ? $url : '';
 }

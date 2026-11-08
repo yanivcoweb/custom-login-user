@@ -301,7 +301,7 @@ function clu_form_text( $option_name, $key ) {
     $options = get_option( $option_name );
     $saved   = is_array( $options ) && isset( $options[ $key ] ) ? (string) $options[ $key ] : '';
 
-    if ( clu_is_custom_text( $saved, $english[ $option_name ][ $key ] ?? '' ) ) {
+    if ( clu_is_custom_text( $saved, $english[ $option_name ][ $key ] ?? '', clu_legacy_defaults()['forms'][ $option_name ][ $key ] ?? [] ) ) {
         return $saved;
     }
 
@@ -517,7 +517,8 @@ function clu_get_admin_notification_recipients() {
         'is_email'
     );
 
-    return $addresses ? implode( ',', $addresses ) : (string) get_option( 'admin_email' );
+    // Trimmed: a site was found with a line break saved after its admin address.
+    return $addresses ? implode( ',', $addresses ) : trim( (string) get_option( 'admin_email' ) );
 }
 
 /**
