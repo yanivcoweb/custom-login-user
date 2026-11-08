@@ -3,7 +3,7 @@
 A WordPress plugin that adds front-end pages for login, registration, password reset and account details, with an admin approval step for new users.
 
 **Author:** Yaniv Sasson
-**Version:** 1.5.0
+**Version:** 1.6.0
 
 ---
 
@@ -19,6 +19,8 @@ A WordPress plugin that adds front-end pages for login, registration, password r
 - Configurable password rules (min length, uppercase, lowercase, numbers, symbols)
 - Custom user roles: `Pending User`, `Approved User` and `Rejected User`, and `Unconfirmed User` on sites that ask for the address to be confirmed, all kept out of the WordPress dashboard
 - Protection against spam and abuse: a hidden bot trap and a limit on the registration form, a limit on reset emails, and the same answer for known and unknown accounts on the login and lost-password forms
+- Optional login protection: a limit on failed logins across the whole site, and Cloudflare Turnstile or Google reCAPTCHA on the forms
+- Changing the email address on My Account needs the current password
 
 The plugin adds pages next to the default ones, and `wp-login.php` keeps working. To send `wp-login.php` and the links to it to your pages instead, turn on **Replace wp-login.php**.
 
@@ -72,6 +74,28 @@ Both are off by default, on the **Mail** tab.
 **Registration received.** The user gets an email saying the registration was received and waits for approval. With the confirmation on, it goes out once the address is confirmed.
 
 The texts of both emails, and of the messages around them, are on the Messages tab.
+
+---
+
+## Login Protection
+
+Both are off by default, on the **Login Protection** tab.
+
+**Limit failed logins.** After too many failed attempts from one address, logins from it are refused for a while, even with the right password. The default is 5 attempts and 15 minutes after the last one.
+
+- It counts the failures of every login form of the site: this plugin's, `wp-login.php`, WooCommerce and XML-RPC. A wrong current password on My Account counts too
+- It goes by the visitor's address. Behind a proxy or CDN every visitor may arrive from the same address, and one limit would then lock everyone out. The tab shows the address the plugin sees: if it is not yours, return the real one through the `clu_client_ip` filter before turning this on
+- An address locked out by mistake opens by itself once the time is up
+
+**Bot check.** Cloudflare Turnstile or Google reCAPTCHA v2 (checkbox), with the keys from the service.
+
+- It appears on this plugin's login, register and lost password forms, and on the same three on `wp-login.php`, including a login form a theme prints with `wp_login_form()`
+- Not on forms of other plugins, such as WooCommerce, and not on XML-RPC
+- Saving checks the secret key with the service, and a refused key turns the bot check off. The tab then shows the widget with the saved keys: if it shows an error, the site key is wrong, so fix it before logging out
+- If the service cannot be reached, or refuses the secret key later, forms are let through without the check and admins see a notice in wp-admin. A bot can cause neither, and refusing everyone would lock the admins out too
+- If a wrong site key ever locks you out, rename the plugin's folder over FTP to turn it off
+
+**Changing the email address.** On My Account a field for the current password appears once the email address is changed, and the change is refused without it. A new address is the way to take over an account, through a password reset sent there, so a stolen session alone is not enough. WordPress also emails the old address about the change.
 
 ---
 
@@ -170,6 +194,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 
 - **Pages URL** — The login, register, password and redirect addresses
 - **Mail** — Sender details, who hears about new registrations, and the emails to new users
+- **Login Protection** — The limit on failed logins and the bot check
 - **Register Fields** — What the register form asks for
 - **Register, Login, Password Reset, Password Lost and My Account Form** — Labels, buttons and validation texts
 - **Password Rules** — Requirements for new passwords
@@ -191,6 +216,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 | `clu_send_rejection_email` | Return false to reject users without emailing them. Receives the user |
 | `clu_send_received_email` | Decide whether a user gets the registration received email. Receives the Mail tab setting and the user |
 | `clu_email_confirm_lifetime` | Seconds a link that confirms an email address stays valid |
+| `clu_login_limit` | The limit on failed logins: an array with `on`, `attempts`, and `window` in seconds |
 | `clu_region_countries` | The regions and countries of the Region and Country fields |
 | `clu_user_can_view_restricted` | Decide who sees restricted content, for example to let in a role that was on the site before the approval flow. Receives the answer, the user and the post ID, which is 0 for restricted content in general |
 | `clu_restrictable_post_types` | The post types that offer the Access box |
@@ -221,6 +247,18 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.6.0
+
+Before updating a live site
+
+- On My Account, changing the email address now needs the current password. A field for it appears once the address is changed.
+
+Added
+
+- **Limit failed logins**, off by default, for every login form of the site. See Login Protection above.
+- **Bot check** with Cloudflare Turnstile or Google reCAPTCHA v2, off by default, on the login, register and lost password forms of this plugin and of `wp-login.php`.
+- A wrong current password on My Account counts as a failed login.
 
 ### 1.5.0
 

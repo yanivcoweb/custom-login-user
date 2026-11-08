@@ -44,6 +44,9 @@ function clu_default_messages() {
         // ── AJAX: Login ──────────────────────────────────────────────────
         'login_success'              => 'Login successful!',
         'login_failed'               => 'The username, email or password is incorrect.',
+        // {minutes} is replaced at runtime with the minutes left.
+        'login_locked'               => 'Too many failed login attempts. Please try again in {minutes} minutes.',
+        'captcha_failed'             => 'Please confirm that you are not a robot, and try again.',
         'account_pending'            => 'Your account is awaiting approval. We will email you as soon as it is approved.',
         'account_rejected'           => 'Your registration was not approved.',
         'account_unconfirmed'        => 'Please confirm your email address first, through the link we emailed you.',
@@ -107,6 +110,7 @@ function clu_default_messages() {
         'profile_email_taken'           => 'This email address is already in use by another account.',
         'password_update_success'       => 'Your password has been changed successfully.',
         'password_current_incorrect'    => 'The current password you entered is incorrect.',
+        'email_change_password_required' => 'To change your email address, please enter your current password.',
         'password_confirm_mismatch'     => 'The new passwords do not match.',
 
         // ── Email: shared ────────────────────────────────────────────────

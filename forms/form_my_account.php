@@ -28,6 +28,13 @@ $required_error = $text( 'required_field_error' );
         echo clu_render_form_fields( $attributes['fields'], $attributes['values'], $required_error, $text( 'email_invalid_error' ), $labels ); // phpcs:ignore WordPress.Security.EscapeOutput
         ?>
 
+        <?php // Shown by validation.js once the email address is changed. ?>
+        <div class="form-row clu-email-password-row" hidden>
+            <label for="email_current_password"><?php echo esc_html( $text( 'email_password' ) ); ?></label>
+            <input type="password" name="email_current_password" id="email_current_password" autocomplete="current-password" aria-describedby="email_current_password_error">
+            <div class="error-message" id="email_current_password_error" data-inputid="email_current_password"><?php echo esc_html( $required_error ); ?></div>
+        </div>
+
         <p class="signup-submit">
             <input type="submit" class="register-button" value="<?php echo esc_attr( $text( 'profile_button' ) ); ?>">
         </p>

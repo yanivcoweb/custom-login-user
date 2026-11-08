@@ -23,6 +23,8 @@ $text = function ( $key ) {
 
         <?php echo clu_render_form_fields( clu_get_register_form_fields(), [], $text( 'required_field_error' ), $text( 'email_invalid_error' ) ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
 
+        <?php echo clu_captcha_html(); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+
         <p class="signup-submit">
             <input type="submit" class="register-button" value="<?php echo esc_attr( $text( 'register_btn_text' ) ); ?>">
         </p>

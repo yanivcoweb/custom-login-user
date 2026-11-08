@@ -15,6 +15,7 @@ $clu_options = [
     'clu_register_form',
     'clu_register_fields',
     'clu_replace_wp_login',
+    'clu_security',
     'clu_login_form',
     'clu_password_reset_form',
     'clu_password_lost_form',
@@ -30,6 +31,7 @@ foreach ( $clu_options as $clu_option ) {
 }
 
 delete_transient( 'clu_pending_count' );
+delete_transient( 'clu_captcha_problem' );
 foreach ( [ 'clu_approval_link', 'clu_email_confirm', 'clu_email_confirmed' ] as $clu_meta ) {
     delete_metadata( 'user', 0, $clu_meta, '', true );
 }

@@ -218,14 +218,15 @@ function approved_role() { return clu_get_role_slug( 'approved_role' ); }
 function reset_state() {
     wp_set_current_user( 0 );
     $GLOBALS['clu_mails'] = [];
-    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_pending_count', 'clu_replace_wp_login' ] as $o ) {
+    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_pending_count', 'clu_replace_wp_login', 'clu_security' ] as $o ) {
         delete_option( $o );
     }
     delete_transient( 'clu_pending_count' );
     clu_keep_legacy_register_fields();
     update_option( 'users_can_register', 1 );
     global $wpdb;
-    $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_transient\_%clu\_rl\_%' OR option_name LIKE '\_transient\_timeout\_%clu\_rl\_%'" );
+    $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\_transient\_%clu\_rl\_%' OR option_name LIKE '\_transient\_timeout\_%clu\_rl\_%' OR option_name LIKE '\_transient\_%clu\_ll\_%' OR option_name LIKE '\_transient\_timeout\_%clu\_ll\_%'" );
+    delete_transient( 'clu_captcha_problem' );
     wp_cache_flush();
 }
 
@@ -1826,7 +1827,245 @@ function confirm_link_of( $email ) {
 }
 
 reset_state();
-section( '25. Nonces, templates, settings, update and uninstall' );
+section( '25. Login protection' );
+{
+    $plain = function ( $key ) { return trim( wp_strip_all_tags( clu_get_message( $key ) ) ); };
+    $lock  = function () { $data = get_transient( clu_login_lock_key() ); return is_array( $data ) ? (int) $data['count'] : 0; };
+
+    // The limit on failed logins.
+    $lp = make_user( 'clu_lp', 'clu-lp@example.test', 'Start1!pass', approved_role() );
+    for ( $i = 0; $i < 7; $i++ ) {
+        login( 'clu_lp', 'wrong' . $i );
+    }
+    $res = login( 'clu_lp', 'Start1!pass' );
+    t( 'with the limit off, failures never lock anyone out', ! empty( $res['success'] ), msg( $res ) );
+    t( 'and nothing is counted', $lock() === 0 );
+
+    update_option( 'clu_security', [ 'limit_logins' => '1', 'login_attempts' => '3', 'lockout_minutes' => '10' ] );
+    for ( $i = 0; $i < 2; $i++ ) {
+        login( 'clu_lp', 'wrong' . $i );
+    }
+    $res = login( 'clu_lp', 'Start1!pass' );
+    t( 'below the limit the right password still logs in', ! empty( $res['success'] ), msg( $res ) );
+    login( 'clu_lp', 'wrong-third' );
+    $res = login( 'clu_lp', 'Start1!pass' );
+    t( 'at the limit even the right password is refused', empty( $res['success'] ) && strpos( msg( $res ), 'Too many failed login attempts' ) !== false && strpos( msg( $res ), '10 minutes' ) !== false, msg( $res ) );
+    t( 'refusals are not counted, so the time does not grow', $lock() === 3, (string) $lock() );
+    $left = clu_login_lock_remaining();
+    t( 'the address is refused for the window after the last failure', $left > 590 && $left <= 600, (string) $left );
+    $auth = wp_authenticate( 'clu_lp', 'Start1!pass' );
+    t( 'every login form of the site is refused, not only this plugin\'s', is_wp_error( $auth ) && $auth->get_error_code() === 'clu_too_many_logins' );
+    $other = function () { return '203.0.113.9'; };
+    add_filter( 'clu_client_ip', $other );
+    $res = login( 'clu_lp', 'Start1!pass' );
+    remove_filter( 'clu_client_ip', $other );
+    t( 'another address is not affected', ! empty( $res['success'] ), msg( $res ) );
+    $html = render_shortcode_safe( $SC_LOGIN, [ 'clu_login_error' => '1' ] );
+    t( 'a failed post from wp-login.php shows the lockout on the login page', strpos( $html, 'Too many failed login attempts' ) !== false );
+    set_transient( clu_login_lock_key(), [ 'count' => 3, 'until' => time() - 1 ], 60 );
+    $res = login( 'clu_lp', 'Start1!pass' );
+    t( 'once the time is up, the address may log in again', ! empty( $res['success'] ), msg( $res ) );
+    $html = render_shortcode_safe( $SC_LOGIN, [ 'clu_login_error' => '1' ] );
+    t( 'and the login page shows the usual error', strpos( $html, $plain( 'login_failed' ) ) !== false && strpos( $html, 'Too many' ) === false );
+
+    delete_transient( clu_login_lock_key() );
+    for ( $i = 0; $i < 3; $i++ ) {
+        login( 'clu-nobody-' . $i, 'x' );
+    }
+    t( 'failures with unknown usernames count too', clu_login_lock_remaining() > 0 );
+    delete_transient( clu_login_lock_key() );
+    wp_authenticate( '', '' );
+    t( 'a visit to the login page with no username counts nothing', $lock() === 0 );
+    make_user( 'clu_lp_pending', 'clu-lp-pending@example.test', 'Start1!pass', pending_role() );
+    for ( $i = 0; $i < 4; $i++ ) {
+        login( 'clu_lp_pending', 'Start1!pass' );
+    }
+    t( 'an account waiting for approval, with the right password, counts nothing', $lock() === 0, (string) $lock() );
+    $filter = function ( $limit ) { $limit['attempts'] = 1; return $limit; };
+    add_filter( 'clu_login_limit', $filter );
+    login( 'clu_lp', 'wrong' );
+    t( 'a filter can change the limit', clu_login_lock_remaining() > 0 );
+    remove_filter( 'clu_login_limit', $filter );
+    delete_transient( clu_login_lock_key() );
+
+    // The current password on My Account.
+    $acc     = make_user( 'clu_lp_acc', 'clu-lp-acc@example.test', 'Start1!pass', approved_role() );
+    $profile = function ( $over ) use ( $acc ) {
+        wp_set_current_user( $acc );
+        return ajax( 'ajax_update_profile', array_merge( [ 'my_account_profile_nonce' => wp_create_nonce( 'my_account_profile_nonce' ), 'first_name' => 'A', 'last_name' => 'B', 'email' => 'clu-lp-acc@example.test', 'company' => 'Acme' ], $over ), $acc );
+    };
+    $res = $profile( [ 'first_name' => 'Same' ] );
+    t( 'saving the profile with the same email needs no password', ! empty( $res['success'] ) && get_userdata( $acc )->first_name === 'Same', msg( $res ) );
+    $res = $profile( [ 'email' => 'clu-lp-new@example.test' ] );
+    t( 'a new email without the current password is refused', empty( $res['success'] ) && msg( $res ) === $plain( 'email_change_password_required' ) && get_userdata( $acc )->user_email === 'clu-lp-acc@example.test', msg( $res ) );
+    $res = $profile( [ 'email' => 'clu-lp-new@example.test', 'email_current_password' => 'wrong' ] );
+    t( 'so is one with a wrong password', empty( $res['success'] ) && msg( $res ) === $plain( 'password_current_incorrect' ) && get_userdata( $acc )->user_email === 'clu-lp-acc@example.test', msg( $res ) );
+    t( 'which counts as a failed login', $lock() === 1, (string) $lock() );
+    $GLOBALS['clu_mails'] = [];
+    $res = $profile( [ 'email' => 'clu-lp-new@example.test', 'email_current_password' => 'Start1!pass' ] );
+    t( 'with the right password the email changes', ! empty( $res['success'] ) && get_userdata( $acc )->user_email === 'clu-lp-new@example.test', msg( $res ) );
+    if ( $bare ) {
+        t( 'and WordPress tells the old address', count( mails_to( 'clu-lp-acc@example.test' ) ) === 1, print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+    }
+    $change_password = function ( $current ) use ( $acc ) {
+        wp_set_current_user( $acc );
+        return ajax( 'ajax_update_password', [ 'my_account_password_nonce' => wp_create_nonce( 'my_account_password_nonce' ), 'current_password' => $current, 'new_password' => 'An0ther!Passw0rd', 'confirm_password' => 'An0ther!Passw0rd' ], $acc );
+    };
+    $change_password( 'wrong-2' );
+    $res = $change_password( 'wrong-3' );
+    t( 'a wrong current password on the password form counts too', empty( $res['success'] ) && $lock() === 3, (string) $lock() );
+    $res = $change_password( 'Start1!pass' );
+    t( 'past the limit, even the right one is refused there', empty( $res['success'] ) && strpos( msg( $res ), 'Too many failed login attempts' ) !== false, msg( $res ) );
+    $res = $profile( [ 'email' => 'clu-lp-acc@example.test', 'email_current_password' => 'Start1!pass' ] );
+    t( 'and on the profile form', empty( $res['success'] ) && get_userdata( $acc )->user_email === 'clu-lp-new@example.test', msg( $res ) );
+    delete_transient( clu_login_lock_key() );
+    wp_set_current_user( $acc );
+    $html = render_shortcode_safe( $SC_ACC );
+    t( 'My Account has the password field for an email change, hidden at first', (bool) preg_match( '/class="form-row clu-email-password-row" hidden/', $html ) && strpos( $html, 'name="email_current_password"' ) !== false );
+    wp_set_current_user( 0 );
+
+    // The bot check.
+    $http_calls = [];
+    $service    = [ 'success' => false, 'error-codes' => [ 'invalid-input-response' ] ];
+    $fake       = function ( $pre, $args, $url ) use ( &$http_calls, &$service ) {
+        if ( strpos( $url, 'siteverify' ) === false ) {
+            return $pre;
+        }
+        $http_calls[] = [ 'url' => $url, 'body' => $args['body'] ];
+        if ( $service === null ) {
+            return new WP_Error( 'http_request_failed', 'cURL error 6: Could not resolve host' );
+        }
+        return [ 'headers' => [], 'body' => wp_json_encode( $service ), 'response' => [ 'code' => 200, 'message' => 'OK' ], 'cookies' => [], 'filename' => null ];
+    };
+    add_filter( 'pre_http_request', $fake, 10, 3 );
+
+    t( 'the bot check is off by default', clu_captcha() === null && strpos( render_shortcode_safe( $SC_LOGIN ), 'clu-captcha' ) === false );
+    update_option( 'clu_security', [ 'captcha' => 'turnstile', 'captcha_site_key' => 'site-key-test', 'captcha_secret_key' => 'secret-key-test' ] );
+    t( 'saving checks the secret key with the service', count( $http_calls ) === 1 && ( $http_calls[0]['body']['secret'] ?? '' ) === 'secret-key-test' && strpos( $http_calls[0]['url'], 'challenges.cloudflare.com' ) !== false, print_r( $http_calls, true ) );
+    t( 'and keeps the check on when the key works', ( clu_captcha()['name'] ?? '' ) === 'turnstile' );
+    foreach ( [ 'login' => $SC_LOGIN, 'register' => $SC_REG, 'lost password' => $SC_LOST ] as $name => $code ) {
+        $html = render_shortcode_safe( $code );
+        t( "the $name form shows the widget", strpos( $html, 'class="clu-captcha cf-turnstile" data-sitekey="site-key-test"' ) !== false );
+    }
+    t( 'and its script is loaded', wp_script_is( 'clu-captcha', 'enqueued' ) && strpos( wp_scripts()->registered['clu-captcha']->src, 'challenges.cloudflare.com/turnstile' ) !== false );
+    wp_set_current_user( $acc );
+    t( 'My Account does not show it', strpos( render_shortcode_safe( $SC_ACC ), 'clu-captcha' ) === false );
+    wp_set_current_user( 0 );
+
+    $res = login( 'clu_lp', 'Start1!pass' );
+    t( 'a login without the answer is refused', empty( $res['success'] ) && msg( $res ) === $plain( 'captcha_failed' ), msg( $res ) );
+    $service    = [ 'success' => true ];
+    $http_calls = [];
+    $res        = login( 'clu_lp', 'Start1!pass', [ 'cf-turnstile-response' => 'token-1' ] );
+    t( 'a passed check lets the login through', ! empty( $res['success'] ), msg( $res ) );
+    t( 'the service is asked with the secret, the answer and the address', ( $http_calls[0]['body'] ?? [] ) == [ 'secret' => 'secret-key-test', 'response' => 'token-1', 'remoteip' => '127.0.0.1' ], print_r( $http_calls, true ) );
+    $service = [ 'success' => false, 'error-codes' => [ 'timeout-or-duplicate' ] ];
+    $res     = login( 'clu_lp', 'Start1!pass', [ 'cf-turnstile-response' => 'token-2' ] );
+    t( 'a failed check is refused', empty( $res['success'] ) && msg( $res ) === $plain( 'captcha_failed' ), msg( $res ) );
+    $res = register( [ 'email' => 'clu-lp-bot@example.test', 'cf-turnstile-response' => 'token-3' ] );
+    t( 'so is a registration', empty( $res['success'] ) && ! get_user_by( 'email', 'clu-lp-bot@example.test' ), msg( $res ) );
+    $res = ajax( 'ajax_password_lost', [ 'password_lost_nonce' => nonce_for( 'password_lost_form_nonce' ), 'user_login' => 'clu-lp@example.test' ] );
+    t( 'and a lost password request', empty( $res['success'] ) && msg( $res ) === $plain( 'captcha_failed' ), msg( $res ) );
+    $service = [ 'success' => true ];
+    $res     = register( [ 'email' => 'clu-lp-human@example.test', 'cf-turnstile-response' => 'token-4' ] );
+    t( 'a registration with a passed check goes through', ! empty( $res['success'] ), msg( $res ) );
+
+    $service = null;
+    $res     = login( 'clu_lp', 'Start1!pass', [ 'cf-turnstile-response' => 'token-5' ] );
+    t( 'when the service cannot be reached, the login goes through', ! empty( $res['success'] ), msg( $res ) );
+    wp_set_current_user( 1 );
+    ob_start();
+    clu_show_captcha_problem();
+    $notice = ob_get_clean();
+    wp_set_current_user( 0 );
+    t( 'and admins see a notice in wp-admin', strpos( $notice, 'could not use the bot check' ) !== false && strpos( $notice, 'Could not resolve host' ) !== false, $notice );
+    $service = [ 'success' => false, 'error-codes' => [ 'invalid-input-secret' ] ];
+    $res     = login( 'clu_lp', 'Start1!pass', [ 'cf-turnstile-response' => 'token-6' ] );
+    t( 'the same when the service refuses the secret key', ! empty( $res['success'] ) && strpos( (string) get_transient( 'clu_captcha_problem' ), 'secret key' ) !== false, msg( $res ) );
+    $service = [ 'success' => true ];
+    login( 'clu_lp', 'Start1!pass', [ 'cf-turnstile-response' => 'token-7' ] );
+    t( 'a working check clears the notice', ! get_transient( 'clu_captcha_problem' ) );
+
+    // wp-login.php.
+    $pagenow_was = $GLOBALS['pagenow'] ?? '';
+    $method_was  = $_SERVER['REQUEST_METHOD'] ?? null;
+    $GLOBALS['pagenow']        = 'wp-login.php';
+    $_SERVER['REQUEST_METHOD'] = 'POST';
+    $_POST = [];
+    $auth  = wp_authenticate( 'clu_lp', 'Start1!pass' );
+    t( 'on wp-login.php a login without the answer is refused', is_wp_error( $auth ) && $auth->get_error_code() === 'clu_captcha_failed', is_wp_error( $auth ) ? $auth->get_error_code() : 'logged in' );
+    $_POST = [ 'cf-turnstile-response' => 'token-8' ];
+    $auth  = wp_authenticate( 'clu_lp', 'Start1!pass' );
+    t( 'and one with a passed check goes through', $auth instanceof WP_User, is_wp_error( $auth ) ? $auth->get_error_code() : '' );
+    $_POST  = [];
+    $errors = apply_filters( 'registration_errors', new WP_Error(), 'clu_lp_core', 'clu-lp-core@example.test' );
+    t( 'its register form is refused without it', in_array( 'clu_captcha_failed', $errors->get_error_codes(), true ) );
+    $errors = new WP_Error();
+    do_action( 'lostpassword_post', $errors, false );
+    t( 'and its lost password form', in_array( 'clu_captcha_failed', $errors->get_error_codes(), true ) );
+    $_SERVER['REQUEST_METHOD'] = 'GET';
+    $auth = wp_authenticate( '', '' );
+    t( 'a visit to wp-login.php is not refused for it', ! is_wp_error( $auth ) || $auth->get_error_code() !== 'clu_captcha_failed' );
+    ob_start();
+    do_action( 'login_form' );
+    do_action( 'register_form' );
+    do_action( 'lostpassword_form' );
+    $forms = ob_get_clean();
+    t( 'wp-login.php shows the widget on its three forms', substr_count( $forms, 'cf-turnstile' ) === 3 );
+    t( 'and so does a login form a theme prints with wp_login_form()', strpos( apply_filters( 'login_form_middle', '', [] ), 'cf-turnstile' ) !== false );
+    $GLOBALS['pagenow']        = 'index.php';
+    $_SERVER['REQUEST_METHOD'] = 'POST';
+    $errors = new WP_Error();
+    do_action( 'lostpassword_post', $errors, false );
+    t( 'the WooCommerce lost password form, which fires the same hook, is left alone', ! in_array( 'clu_captcha_failed', $errors->get_error_codes(), true ) );
+    $auth = wp_authenticate( 'clu_lp', 'Start1!pass' );
+    t( 'and so are logins outside wp-login.php, such as WooCommerce\'s', $auth instanceof WP_User, is_wp_error( $auth ) ? $auth->get_error_code() : '' );
+    $GLOBALS['pagenow'] = $pagenow_was;
+    if ( $method_was === null ) {
+        unset( $_SERVER['REQUEST_METHOD'] );
+    } else {
+        $_SERVER['REQUEST_METHOD'] = $method_was;
+    }
+    $_POST = [];
+
+    // Saving the keys.
+    $service = [ 'success' => false, 'error-codes' => [ 'invalid-input-secret' ] ];
+    update_option( 'clu_security', [ 'captcha' => 'recaptcha', 'captcha_site_key' => 'a', 'captcha_secret_key' => 'wrong' ] );
+    t( 'a secret key the service refuses turns the bot check off', clu_captcha() === null && ( get_option( 'clu_security' )['captcha'] ?? 'x' ) === '' );
+    t( 'reCAPTCHA keys are checked at Google', strpos( end( $http_calls )['url'], 'google.com/recaptcha' ) !== false );
+    $service = null;
+    update_option( 'clu_security', [ 'captcha' => 'recaptcha', 'captcha_site_key' => 'a', 'captcha_secret_key' => 'other' ] );
+    t( 'a key that cannot be checked now is kept', ( clu_captcha()['name'] ?? '' ) === 'recaptcha' );
+    $calls = count( $http_calls );
+    update_option( 'clu_security', [ 'captcha' => 'recaptcha', 'captcha_site_key' => 'b', 'captcha_secret_key' => 'other' ] );
+    t( 'an unchanged secret key is not checked again', count( $http_calls ) === $calls );
+    t( 'reCAPTCHA has its own widget', strpos( render_shortcode_safe( $SC_REG ), 'class="clu-captcha g-recaptcha" data-sitekey="b"' ) !== false );
+    update_option( 'clu_security', [ 'captcha' => 'turnstile', 'captcha_site_key' => '', 'captcha_secret_key' => 'x' ] );
+    t( 'without both keys the bot check stays off', clu_captcha() === null && strpos( render_shortcode_safe( $SC_LOGIN ), 'clu-captcha' ) === false );
+    remove_filter( 'pre_http_request', $fake, 10 );
+
+    // The tab.
+    if ( ! function_exists( 'add_settings_section' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/template.php';
+    }
+    clu_register_settings();
+    $clean = sanitize_option( 'clu_security', [ 'limit_logins' => 'on', 'login_attempts' => '-3', 'lockout_minutes' => 'abc', 'captcha' => 'evil', 'captcha_site_key' => ' k ', 'captcha_secret_key' => 's' ] );
+    t( 'the tab keeps the numbers positive, and the service one of its list', $clean['limit_logins'] === '1' && $clean['login_attempts'] === '5' && $clean['lockout_minutes'] === '15' && $clean['captcha'] === '' && $clean['captcha_site_key'] === 'k', print_r( $clean, true ) );
+    ob_start();
+    do_settings_sections( 'login-protection-group' );
+    $tab = ob_get_clean();
+    t( 'it shows the address the plugin sees', strpos( $tab, '<code>127.0.0.1</code>' ) !== false );
+    t( 'and offers both services', strpos( $tab, '<option value="turnstile"' ) !== false && strpos( $tab, '<option value="recaptcha"' ) !== false && strpos( $tab, 'type="number"' ) !== false );
+    foreach ( clu_get_settings_tabs() as $tab_def ) {
+        if ( ! empty( $tab_def['option_name'] ) ) {
+            remove_all_filters( 'sanitize_option_' . $tab_def['option_name'] );
+        }
+    }
+    delete_transient( clu_login_lock_key() );
+}
+
+reset_state();
+section( '26. Nonces, templates, settings, update and uninstall' );
 {
     $res = ajax( 'clu_refresh_nonce', [ 'field' => 'login_nonce' ] );
     wp_set_current_user( 0 );
@@ -1884,7 +2123,7 @@ section( '25. Nonces, templates, settings, update and uninstall' );
     }
     $dead = [];
     foreach ( $fields as $option => $keys ) {
-        if ( in_array( $option, [ 'clu_mail', 'clu_pages_url' ], true ) ) {
+        if ( in_array( $option, [ 'clu_mail', 'clu_pages_url', 'clu_security' ], true ) ) {
             continue;
         }
         foreach ( $keys as $key ) {
@@ -1939,6 +2178,7 @@ section( '25. Nonces, templates, settings, update and uninstall' );
     clu_add_unconfirmed_role();
     update_option( 'clu_mail', [ 'from_name' => 'x' ] );
     update_option( 'clu_replace_wp_login', '1' );
+    update_option( 'clu_security', [ 'limit_logins' => '1' ] );
     foreach ( [ 'pending_user', 'approved_user', 'rejected_user', 'unconfirmed_user' ] as $r ) {
         foreach ( get_users( [ 'role' => $r, 'fields' => 'ID' ] ) as $uid ) {
             get_userdata( $uid )->set_role( 'subscriber' );
@@ -1952,12 +2192,13 @@ section( '25. Nonces, templates, settings, update and uninstall' );
     t( 'uninstall removes the unused roles', ! get_role( 'pending_user' ) && ! get_role( 'approved_user' ) && ! get_role( 'rejected_user' ) && ! get_role( 'unconfirmed_user' ) );
     t( 'uninstall removes the field list', get_option( 'clu_register_fields', 'gone' ) === 'gone' );
     t( 'uninstall removes the replacement setting', get_option( 'clu_replace_wp_login', 'gone' ) === 'gone' );
+    t( 'uninstall removes the login protection settings', get_option( 'clu_security', 'gone' ) === 'gone' );
     t( 'uninstall removes the flag on users', ! get_user_meta( $marker_id, 'clu_approval_link', true ) );
     t( 'uninstall removes what confirmed an address', ! get_user_meta( $marker_id, 'clu_email_confirm', true ) && ! get_user_meta( $marker_id, 'clu_email_confirmed', true ) );
     t( 'uninstall removes the flag on pages', get_post_meta( $marker_page, '_clu_restricted', true ) === '' );
 }
 
-section( '26. PHP warnings raised from inside the plugin during all of the above' );
+section( '27. PHP warnings raised from inside the plugin during all of the above' );
 $warnings = array_values( array_unique( $GLOBALS['clu_php_warnings'] ) );
 t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", array_slice( $warnings, 0, 12 ) ) );
 

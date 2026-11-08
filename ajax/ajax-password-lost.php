@@ -13,6 +13,10 @@ function clu_handle_ajax_password_lost() {
         wp_send_json_error( [ 'message' => clu_render_message( 'email_required' ) ] );
     }
 
+    if ( ! clu_verify_captcha() ) {
+        wp_send_json_error( [ 'message' => clu_render_message( 'captcha_failed' ) ] );
+    }
+
     if ( clu_rate_limited( 'lost_password_ip', 20, 15 * MINUTE_IN_SECONDS ) ) {
         wp_send_json_error( [ 'message' => clu_render_message( 'too_many_attempts' ) ] );
     }

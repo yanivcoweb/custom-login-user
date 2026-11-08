@@ -19,6 +19,12 @@ function clu_handle_ajax_update_profile() {
         wp_send_json_error( [ 'message' => clu_render_message( 'profile_email_taken' ) ] );
     }
 
+    // A new address is the way to take over an account, through a password reset sent
+    // to it. So whoever changes it has to know the password, not only hold the session.
+    if ( $values['email'] !== get_userdata( $user_id )->user_email ) {
+        clu_require_current_password( $user_id, 'email_current_password', 'email_change_password_required' );
+    }
+
     $update = [
         'ID'         => $user_id,
         'user_email' => $values['email'],

@@ -118,6 +118,33 @@ function clu_client_ip() {
     return (string) apply_filters( 'clu_client_ip', $ip );
 }
 
+/**
+ * Stops the AJAX request unless the posted field holds the user's current password.
+ *
+ * A wrong one counts as a failed login, so that a stolen session cannot be used to
+ * guess the password here instead.
+ *
+ * @param int    $user_id
+ * @param string $field         Form field that holds the password.
+ * @param string $empty_message Message key for an empty field.
+ */
+function clu_require_current_password( $user_id, $field, $empty_message ) {
+    $password = clu_post_password( $field );
+
+    if ( $password === '' ) {
+        wp_send_json_error( [ 'message' => clu_render_message( $empty_message ) ] );
+    }
+
+    if ( clu_login_lock_remaining() ) {
+        wp_send_json_error( [ 'message' => clu_login_locked_message() ] );
+    }
+
+    if ( ! wp_check_password( $password, get_userdata( $user_id )->user_pass, $user_id ) ) {
+        clu_note_failed_login();
+        wp_send_json_error( [ 'message' => clu_render_message( 'password_current_incorrect' ) ] );
+    }
+}
+
 /* ─── URLs ───────────────────────────────────────────────────────────── */
 
 /**

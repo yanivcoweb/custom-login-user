@@ -40,6 +40,12 @@ return [
         'default'     => 'Company Name',
     ],
     [
+        'field'       => 'email_password',
+        'label'       => 'Current Password Label, to change the email',
+        'placeholder' => 'Enter the label shown once the email address is changed',
+        'default'     => 'Current password, to change the email address',
+    ],
+    [
         'field'       => 'profile_button',
         'label'       => 'Profile Button Text',
         'placeholder' => 'Enter the text for the profile button',

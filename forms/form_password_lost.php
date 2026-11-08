@@ -22,6 +22,8 @@ $text = function ( $key ) {
             <div class="error-message" id="user_login_error" data-inputid="user_login"><?php echo esc_html( $text( 'required_field_error' ) ); ?></div>
         </div>
 
+        <?php echo clu_captcha_html(); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+
         <p class="password-lost-submit">
             <input type="submit" class="password-lost-button-- button--" value="<?php echo esc_attr( $text( 'renew_password' ) ); ?>">
         </p>

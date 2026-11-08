@@ -23,6 +23,10 @@ function clu_handle_ajax_register() {
         wp_send_json_success( $success );
     }
 
+    if ( ! clu_verify_captcha() ) {
+        wp_send_json_error( [ 'message' => clu_render_message( 'captcha_failed' ) ] );
+    }
+
     $values = clu_read_posted_fields( clu_get_register_form_fields() );
 
     if ( is_wp_error( $values ) ) {

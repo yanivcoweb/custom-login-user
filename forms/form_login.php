@@ -42,6 +42,8 @@ $text = function ( $key ) {
             <a class="forgot-password" href="<?php echo esc_url( clu_get_page_url( 'url_page_password_lost', wp_lostpassword_url() ) ); ?>"><?php echo esc_html( $text( 'pass_reset_link' ) ); ?></a>
         </div>
 
+        <?php echo clu_captcha_html(); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+
         <div class="login-submit">
             <input type="submit" id="login-submit" class="button-- button-primary--" value="<?php echo esc_attr( $text( 'login_button' ) ); ?>">
         </div>

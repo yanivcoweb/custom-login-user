@@ -143,6 +143,61 @@
         output.classList.add('clu-response--' + state);
     }
 
+    // The service accepts each answer of the bot check once, so every reply from the
+    // server needs a new one.
+    function resetCaptcha(form) {
+        const box = form.querySelector('.clu-captcha');
+
+        if (!box) {
+            return;
+        }
+
+        try {
+            if (box.classList.contains('cf-turnstile') && window.turnstile) {
+                window.turnstile.reset(box);
+            } else if (box.classList.contains('g-recaptcha') && window.grecaptcha) {
+                // Widgets rendered by the script itself are numbered in page order.
+                window.grecaptcha.reset([...document.querySelectorAll('.g-recaptcha')].indexOf(box));
+            }
+        } catch (error) {
+            // A widget that failed to load has nothing to reset.
+        }
+    }
+
+    // My Account asks for the current password only once the email address changes.
+    function watchEmailChange(form) {
+        const email = form.querySelector('input[name="email"]');
+        const row   = form.querySelector('.clu-email-password-row');
+
+        if (!email || !row) {
+            return;
+        }
+
+        const password = row.querySelector('input');
+
+        const update = () => {
+            const changed = email.value.trim() !== email.defaultValue.trim();
+
+            row.hidden = !changed;
+
+            if (changed) {
+                password.setAttribute('custom-required', '');
+            } else {
+                password.removeAttribute('custom-required');
+                password.value = '';
+                hideError(form, password);
+            }
+        };
+
+        email.addEventListener('input', update);
+
+        // After a save, the new address is the one to compare with.
+        form.addEventListener('clu:saved', () => {
+            email.defaultValue = email.value;
+            update();
+        });
+    }
+
     // A cached page or a login in another tab can leave the form with a dead nonce.
     async function refreshNonce(form) {
         const field = form.querySelector('input[name$="_nonce"]');
@@ -188,6 +243,7 @@
 
         if (!result || !data.message) {
             showResponse(output, messages.network_error, 'error');
+            resetCaptcha(form);
             return;
         }
 
@@ -197,10 +253,14 @@
             if (!KEEP_VALUES_ON_SUCCESS.includes(form.id)) {
                 form.reset();
             }
+            form.dispatchEvent(new CustomEvent('clu:saved'));
             if (data.redirect) {
                 window.location.href = data.redirect;
+                return;
             }
         }
+
+        resetCaptcha(form);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -211,8 +271,10 @@
                 return;
             }
 
+            watchEmailChange(form);
+
             // Editing a field clears its error.
-            form.querySelectorAll('[custom-required]').forEach((input) => {
+            form.querySelectorAll('[custom-required], .clu-email-password-row input').forEach((input) => {
                 input.addEventListener('focus', () => hideError(form, input));
                 input.addEventListener('change', () => hideError(form, input));
             });

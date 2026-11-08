@@ -26,7 +26,11 @@ function clu_render_login_form( $attributes ) {
     $requested               = isset( $_GET['redirect_to'] ) && is_string( $_GET['redirect_to'] ) ? wp_unslash( $_GET['redirect_to'] ) : '';
     $attributes['redirect']  = wp_validate_redirect( $requested, '' );
     // Set when a login posted to wp-login.php failed and was sent here.
-    $attributes['error']     = isset( $_GET['clu_login_error'] ) ? clu_render_message( 'login_failed' ) : '';
+    $attributes['error'] = '';
+
+    if ( isset( $_GET['clu_login_error'] ) ) {
+        $attributes['error'] = clu_login_lock_remaining() ? clu_login_locked_message() : clu_render_message( 'login_failed' );
+    }
 
     // Where the link that confirms an email address leads, when there is no register page.
     return clu_email_confirmation_notice() . clu_get_template_html( 'form_login', $attributes );

@@ -36,6 +36,9 @@ function clu_enqueue_admin_assets( $hook ) {
         'registerFieldsNonce' => wp_create_nonce( 'clu_register_fields_nonce' ),
         'loginReplacementNonce' => wp_create_nonce( 'clu_login_replacement_nonce' ),
     ] );
+
+    // For the preview of the bot check on the Login Protection tab.
+    clu_enqueue_captcha_script();
 }
 
 /**
@@ -124,6 +127,14 @@ function clu_get_settings_tabs() {
         'user-roles' => [
             'title' => 'User Roles',
             'type'  => 'roles',
+        ],
+        'login-protection-settings' => [
+            'title'          => 'Login Protection',
+            'settings_group' => 'login-protection-group',
+            'section_id'     => 'login-protection-section',
+            'section_title'  => 'Login Protection',
+            'fields_file'    => $fields_dir . 'array_security.php',
+            'option_name'    => 'clu_security',
         ],
         'setup-pages' => [
             'title' => 'Setup Pages',
@@ -216,6 +227,10 @@ function clu_register_settings() {
                             $clean[ $key ] = sanitize_email( $value );
                         } elseif ( $type === 'checkbox' ) {
                             $clean[ $key ] = empty( $value ) ? '' : '1';
+                        } elseif ( $type === 'number' ) {
+                            $clean[ $key ] = is_numeric( $value ) && (int) $value > 0 ? (string) (int) $value : $field['default'];
+                        } elseif ( $type === 'select' ) {
+                            $clean[ $key ] = is_string( $value ) && isset( $field['options'][ $value ] ) ? $value : $field['default'];
                         } else {
                             $clean[ $key ] = sanitize_text_field( $value );
                         }
@@ -252,6 +267,21 @@ function clu_register_settings() {
                             checked( $value, '1', false ),
                             esc_html( $args['checkbox_label'] )
                         );
+                    } elseif ( $type === 'select' ) {
+                        printf( '<select id="%s" name="%s">', esc_attr( $args['label_for'] ), esc_attr( $name ) );
+
+                        foreach ( $args['options'] as $option_value => $option_label ) {
+                            printf( '<option value="%s" %s>%s</option>', esc_attr( $option_value ), selected( $value, $option_value, false ), esc_html( $option_label ) );
+                        }
+
+                        echo '</select>';
+                    } elseif ( $type === 'number' ) {
+                        printf(
+                            '<input type="number" id="%s" name="%s" value="%s" min="1" step="1" class="small-text">',
+                            esc_attr( $args['label_for'] ),
+                            esc_attr( $name ),
+                            esc_attr( $value )
+                        );
                     } else {
                         echo "<input type='" . esc_attr( $type ) . "' id='" . esc_attr( $args['label_for'] ) . "' name='" . esc_attr( $name ) . "' value='" . esc_attr( $value ) . "' placeholder='" . esc_attr( $args['placeholder'] ) . "' class='regular-text' />";
                     }
@@ -269,6 +299,7 @@ function clu_register_settings() {
                     'type'           => $field['type'] ?? 'text',
                     'description'    => $field['description'] ?? '',
                     'checkbox_label' => $field['checkbox_label'] ?? '',
+                    'options'        => $field['options'] ?? [],
                 ]
             );
         }
@@ -475,6 +506,8 @@ function clu_render_messages_tab() {
             'form_processing'             => 'Shown while a form is being sent',
             'login_success'               => 'Login: success',
             'login_failed'                => 'Login: wrong details',
+            'login_locked'                => 'Login: refused after too many failed attempts (<code>{minutes}</code> = minutes left)',
+            'captcha_failed'              => 'Bot check not passed',
             'account_pending'             => 'Account awaiting approval',
             'account_rejected'            => 'Account rejected',
             'account_unconfirmed'         => 'Account whose email address is not confirmed yet',
@@ -503,6 +536,7 @@ function clu_render_messages_tab() {
             'profile_email_taken'           => 'Profile: email in use by another account',
             'password_update_success'       => 'Password: changed',
             'password_current_incorrect'    => 'Password: current password wrong',
+            'email_change_password_required' => 'Profile: the email changed and the current password is missing',
             'password_confirm_mismatch'     => 'Password: the two new passwords differ',
         ],
         'Shortcode Text' => [
