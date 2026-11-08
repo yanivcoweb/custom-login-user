@@ -42,6 +42,7 @@ function clu_save_roles_handler() {
         'pending_role'  => $pending,
         'approved_role' => $approved,
     ] );
+    update_option( 'clu_auto_approve', clu_post_text( 'auto_approve' ) === '1' ? '1' : '' );
 
     wp_send_json_success( [ 'message' => 'Role assignments saved.' ] );
 }

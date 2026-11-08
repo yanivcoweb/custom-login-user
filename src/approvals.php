@@ -191,26 +191,31 @@ function clu_show_decision_notices() {
         return isset( $_GET[ $name ] ) && is_string( $_GET[ $name ] ) ? absint( $_GET[ $name ] ) : 0;
     };
 
-    $notices = [];
+    // Counted first: the tools that collect texts for translation skip a call as the count.
+    $approved    = $count( 'clu_approved' );
+    $rejected    = $count( 'clu_rejected' );
+    $mail_failed = $count( 'clu_mail_failed' );
+    $skipped     = $count( 'clu_skipped' );
+    $notices     = [];
 
-    if ( $count( 'clu_approved' ) ) {
+    if ( $approved ) {
         /* translators: %d: number of users. */
-        $notices[] = [ 'success', sprintf( _n( '%d user approved. A set-password email went out.', '%d users approved. A set-password email went out to each.', $count( 'clu_approved' ), 'custom-login-users' ), $count( 'clu_approved' ) ) ];
+        $notices[] = [ 'success', sprintf( _n( '%d user approved. A set-password email went out.', '%d users approved. A set-password email went out to each.', $approved, 'custom-login-users' ), $approved ) ];
     }
 
-    if ( $count( 'clu_rejected' ) ) {
+    if ( $rejected ) {
         /* translators: %d: number of users. */
-        $notices[] = [ 'success', sprintf( _n( '%d user rejected.', '%d users rejected.', $count( 'clu_rejected' ), 'custom-login-users' ), $count( 'clu_rejected' ) ) ];
+        $notices[] = [ 'success', sprintf( _n( '%d user rejected.', '%d users rejected.', $rejected, 'custom-login-users' ), $rejected ) ];
     }
 
-    if ( $count( 'clu_mail_failed' ) ) {
+    if ( $mail_failed ) {
         /* translators: %d: number of users. */
-        $notices[] = [ 'error', sprintf( _n( 'The email to %d user could not be sent, so they do not know about the decision yet.', 'The emails to %d users could not be sent, so they do not know about the decision yet.', $count( 'clu_mail_failed' ), 'custom-login-users' ), $count( 'clu_mail_failed' ) ) ];
+        $notices[] = [ 'error', sprintf( _n( 'The email to %d user could not be sent, so they do not know about the decision yet.', 'The emails to %d users could not be sent, so they do not know about the decision yet.', $mail_failed, 'custom-login-users' ), $mail_failed ) ];
     }
 
-    if ( $count( 'clu_skipped' ) ) {
+    if ( $skipped ) {
         /* translators: %d: number of users. */
-        $notices[] = [ 'warning', sprintf( _n( '%d user was skipped: not waiting for this decision, or you may not change their role.', '%d users were skipped: not waiting for this decision, or you may not change their role.', $count( 'clu_skipped' ), 'custom-login-users' ), $count( 'clu_skipped' ) ) ];
+        $notices[] = [ 'warning', sprintf( _n( '%d user was skipped: not waiting for this decision, or you may not change their role.', '%d users were skipped: not waiting for this decision, or you may not change their role.', $skipped, 'custom-login-users' ), $skipped ) ];
     }
 
     foreach ( $notices as $notice ) {

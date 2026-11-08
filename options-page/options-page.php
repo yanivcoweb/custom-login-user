@@ -148,7 +148,9 @@ function clu_render_settings_page() {
         return;
     }
 
-    $tabs = clu_get_settings_tabs();
+    // The default texts show in the language visitors see, whatever the admin's own.
+    $switched = switch_to_locale( get_locale() );
+    $tabs     = clu_get_settings_tabs();
     ?>
     <div class="wrap clu-custom-settings">
         <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
@@ -199,6 +201,10 @@ function clu_render_settings_page() {
         <?php endforeach; ?>
     </div>
     <?php
+
+    if ( $switched ) {
+        restore_previous_locale();
+    }
 }
 
 add_action( 'admin_init', 'clu_register_settings' );
@@ -208,15 +214,24 @@ function clu_register_settings() {
             continue;
         }
 
-        $fields = include $tab['fields_file'];
+        $fields  = include $tab['fields_file'];
+        $english = clu_untranslated( function () use ( $tab ) {
+            return array_column( include $tab['fields_file'], 'default', 'field' );
+        } );
 
         register_setting(
             $tab['settings_group'],
             $tab['option_name'],
             [
-                'sanitize_callback' => function ( $input ) use ( $fields ) {
-                    $input = is_array( $input ) ? $input : [];
-                    $clean = [];
+                'sanitize_callback' => function ( $input ) use ( $fields, $english, $tab ) {
+                    $input    = is_array( $input ) ? $input : [];
+                    $clean    = [];
+                    $switched = switch_to_locale( get_locale() );
+                    $site     = clu_form_text_defaults();
+
+                    if ( $switched ) {
+                        restore_previous_locale();
+                    }
 
                     foreach ( $fields as $field ) {
                         $key   = $field['field'];
@@ -233,6 +248,14 @@ function clu_register_settings() {
                             $clean[ $key ] = is_string( $value ) && isset( $field['options'][ $value ] ) ? $value : $field['default'];
                         } else {
                             $clean[ $key ] = sanitize_text_field( $value );
+
+                            // A default left as it was is not stored, so that it keeps
+                            // following the site's language.
+                            $defaults = array_filter( [ $english[ $key ] ?? '', $field['default'], $site[ $tab['option_name'] ][ $key ] ?? '' ] );
+
+                            if ( in_array( $clean[ $key ], $defaults, true ) ) {
+                                $clean[ $key ] = '';
+                            }
                         }
                     }
 
@@ -256,6 +279,12 @@ function clu_register_settings() {
                     $options = get_option( $tab['option_name'] );
                     $options = is_array( $options ) ? $options : [];
                     $value   = $options[ $args['label_for'] ] ?? $args['default'];
+
+                    // A text with a default shows what the form shows: the default when
+                    // none was written.
+                    if ( ( $args['type'] ?? 'text' ) === 'text' && $args['default'] !== '' ) {
+                        $value = clu_form_text( $tab['option_name'], $args['label_for'] );
+                    }
                     $type    = $args['type'] ?? 'text';
                     $name    = $tab['option_name'] . '[' . $args['label_for'] . ']';
 
@@ -490,12 +519,15 @@ function clu_render_password_rules_tab() {
 
 function clu_render_messages_tab() {
     $defaults = clu_default_messages();
+    $english  = clu_english_messages();
     $saved    = get_option( 'clu_messages', [] );
     $saved    = is_array( $saved ) ? $saved : [];
 
-    // Helper: current value (saved or default)
-    $val = function ( $key ) use ( $defaults, $saved ) {
-        return isset( $saved[ $key ] ) && $saved[ $key ] !== '' ? $saved[ $key ] : ( $defaults[ $key ] ?? '' );
+    // What the site shows: the text an admin wrote, or the default.
+    $val = function ( $key ) use ( $defaults, $english, $saved ) {
+        $value = isset( $saved[ $key ] ) ? (string) $saved[ $key ] : '';
+
+        return clu_is_custom_text( $value, $english[ $key ] ?? '' ) ? $value : ( $defaults[ $key ] ?? '' );
     };
 
     $sections = [
@@ -515,6 +547,7 @@ function clu_render_messages_tab() {
             'register_invalid_field'      => 'Register and My Account: a value is not valid (<code>{field}</code> = its label)',
             'email_already_registered'    => 'Register: email already registered',
             'register_success'            => 'Register: success',
+            'register_success_auto'       => 'Register: success, with automatic approval',
             'register_confirm_sent'       => 'Register: success, when the email address must be confirmed first',
             'confirm_email_send_failed'   => 'Register: the confirmation email could not be sent',
             'email_required'              => 'Password lost: email required',
@@ -546,6 +579,7 @@ function clu_render_messages_tab() {
             'invalid_reset_link_page' => 'Set password page: invalid link',
             'expired_reset_link_page' => 'Set password page: expired link',
             'email_confirmed'         => 'Email confirmation link: confirmed',
+            'email_confirmed_auto'    => 'Email confirmation link: confirmed, with automatic approval',
             'email_already_confirmed' => 'Email confirmation link: used before',
             'email_confirm_invalid'   => 'Email confirmation link: invalid or expired',
             'logout_button_text'      => 'Auth buttons: logout text',
@@ -567,6 +601,8 @@ function clu_render_messages_tab() {
             'reset_email_body'      => 'Password reset email — body (<code>{display_name}</code> = name, <code>{reset_url}</code> = reset URL, <code>{reset_link}</code> = link)',
             'notify_client_subject' => 'New registration email to admin — subject (<code>%s</code> = name)',
             'notify_client_body'    => 'New registration email to admin — body (<code>{display_name}</code> = name, <code>{user_details}</code> = what the user filled in, <code>{pending_users_link}</code> = link to the users awaiting approval, <code>{pending_users_url}</code> = its URL, <code>{edit_user_link}</code> = link to edit this user, <code>{edit_user_url}</code> = its URL)',
+            'notify_auto_subject'   => 'New user approved automatically, email to admin — subject (<code>%s</code> = name)',
+            'notify_auto_body'      => 'New user approved automatically, email to admin — body (the same placeholders as the new registration email)',
             'notify_user_subject'   => 'Account approved email to user — subject (<code>%s</code> = name)',
             'notify_user_body'      => 'Account approved email to user — body (<code>{display_name}</code> = name, <code>{set_password_url}</code> = set-password URL, <code>{set_password_link}</code> = link)',
             'notify_rejected_subject' => 'Registration rejected email to user — subject (<code>%s</code> = name)',
@@ -574,7 +610,7 @@ function clu_render_messages_tab() {
         ],
     ];
 
-    $editor_keys = [ 'already_logged_in', 'reset_email_body', 'confirm_email_body', 'notify_received_body', 'notify_client_body', 'notify_user_body', 'notify_rejected_body' ];
+    $editor_keys = [ 'already_logged_in', 'reset_email_body', 'confirm_email_body', 'notify_received_body', 'notify_client_body', 'notify_auto_body', 'notify_user_body', 'notify_rejected_body' ];
     ?>
     <h2>Plugin Messages</h2>
     <p>Edit the text shown to users. Leave a field blank to use the built-in default.</p>
@@ -673,6 +709,19 @@ function clu_render_roles_tab() {
     </table>
     <p class="description">Rejecting a user from the <strong>Users</strong> list moves them to the Rejected User role and sends them an email. They cannot log in, and you can still approve them later, or delete them.</p>
     <p class="description">When new users confirm their email address first (on the <strong>Mail</strong> tab), they have the Unconfirmed User role until they do. You can approve one directly, or delete the accounts nobody confirmed.</p>
+
+    <table class="form-table">
+        <tr>
+            <th><label for="clu-auto-approve">Automatic approval</label></th>
+            <td>
+                <label class="clu-checkbox-label">
+                    <input type="checkbox" id="clu-auto-approve" value="1" <?php checked( clu_auto_approve_is_on() ); ?>>
+                    Approve new users automatically
+                </label>
+                <p class="description">New users get the set-password email at once, and you get an email about each one. With the email confirmation on, this happens once the address is confirmed. Users already waiting stay in the list until you approve them. On a site open to everyone, use it together with the email confirmation and a bot check, or bots get working accounts.</p>
+            </td>
+        </tr>
+    </table>
 
     <p>
         <button type="button" id="clu-save-roles-btn" class="button button-primary">Save Role Assignments</button>
@@ -801,5 +850,22 @@ function clu_render_setup_pages_tab() {
         <span id="clu-replace-login-spinner" class="spinner"></span>
     </p>
     <div id="clu-replace-login-result"></div>
+
+    <hr style="margin:24px 0;">
+
+    <h2>Templates</h2>
+    <p>To change the HTML of a form, copy its file from the plugin's <code>forms</code> folder to a <code>custom-login-users</code> folder in the theme, and edit the copy. A child theme's copy comes first.</p>
+    <?php $overrides = clu_theme_template_overrides(); ?>
+    <?php if ( $overrides ) : ?>
+        <p><strong>This theme replaces:</strong></p>
+        <ul class="ul-disc">
+            <?php foreach ( $overrides as $name => $path ) : ?>
+                <li><code><?php echo esc_html( $name . '.php' ); ?></code> &mdash; <?php echo esc_html( wp_normalize_path( $path ) ); ?></li>
+            <?php endforeach; ?>
+        </ul>
+        <p class="description">After updating the plugin, compare these copies with its new files: a copy keeps the old form, without what the update added to it.</p>
+    <?php else : ?>
+        <p class="description">This theme replaces none of them.</p>
+    <?php endif; ?>
     <?php
 }

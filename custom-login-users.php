@@ -3,17 +3,18 @@
  * Plugin Name:       Custom Login Users
  * Plugin URI:        https://github.com/yanivcoweb/custom-login-user
  * Description:       Front-end login, registration, password and account pages, with an admin approval step for new users.
- * Version:           1.6.0
+ * Version:           1.7.0
  * Requires at least: 5.0
  * Requires PHP:      7.4
  * Author:            Yaniv Sasson
  * Author URI:        https://yanivsasson.co.il/
  * Text Domain:       custom-login-users
+ * Domain Path:       /languages
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'CLU_VERSION', '1.6.0' );
+define( 'CLU_VERSION', '1.7.0' );
 define( 'CLU_PLUGIN_FILE', __FILE__ );
 define( 'CLU_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CLU_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -93,6 +94,15 @@ function clu_maybe_upgrade() {
     }
 
     update_option( 'clu_db_version', CLU_VERSION );
+}
+
+/**
+ * Loads the translations in the plugin's languages folder. A translation in
+ * wp-content/languages/plugins, such as one made with Loco Translate, comes first.
+ */
+add_action( 'init', 'clu_load_textdomain', 1 );
+function clu_load_textdomain() {
+    load_plugin_textdomain( 'custom-login-users', false, dirname( plugin_basename( CLU_PLUGIN_FILE ) ) . '/languages' );
 }
 
 add_action( 'wp_enqueue_scripts', 'clu_register_assets' );

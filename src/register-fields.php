@@ -25,13 +25,13 @@ function clu_default_register_fields() {
             return array_merge( $base, $field );
         },
         [
-            [ 'key' => 'first_name', 'label' => 'First Name', 'enabled' => true, 'account' => true ],
-            [ 'key' => 'last_name', 'label' => 'Last Name', 'enabled' => true, 'account' => true ],
-            [ 'key' => 'email', 'label' => 'Email Address', 'type' => 'email', 'enabled' => true, 'account' => true ],
-            [ 'key' => 'company', 'label' => 'Company Name' ],
-            [ 'key' => 'customer_type', 'label' => 'Customer Type', 'type' => 'select', 'options' => [ 'Distributor', 'Integrator', 'Installer', 'Consultant', 'End-user' ] ],
-            [ 'key' => 'region', 'label' => 'Region', 'type' => 'region' ],
-            [ 'key' => 'country', 'label' => 'Country', 'type' => 'country' ],
+            [ 'key' => 'first_name', 'label' => __( 'First Name', 'custom-login-users' ), 'enabled' => true, 'account' => true ],
+            [ 'key' => 'last_name', 'label' => __( 'Last Name', 'custom-login-users' ), 'enabled' => true, 'account' => true ],
+            [ 'key' => 'email', 'label' => __( 'Email Address', 'custom-login-users' ), 'type' => 'email', 'enabled' => true, 'account' => true ],
+            [ 'key' => 'company', 'label' => __( 'Company Name', 'custom-login-users' ) ],
+            [ 'key' => 'customer_type', 'label' => __( 'Customer Type', 'custom-login-users' ), 'type' => 'select', 'options' => [ 'Distributor', 'Integrator', 'Installer', 'Consultant', 'End-user' ] ],
+            [ 'key' => 'region', 'label' => __( 'Region', 'custom-login-users' ), 'type' => 'region' ],
+            [ 'key' => 'country', 'label' => __( 'Country', 'custom-login-users' ), 'type' => 'country' ],
         ]
     );
 }
@@ -90,6 +90,12 @@ function clu_is_builtin_field( $key ) {
  * @return array[]
  */
 function clu_normalize_register_fields( $rows ) {
+    static $english = null;
+
+    if ( $english === null ) {
+        $english = array_column( clu_untranslated( 'clu_default_register_fields' ), 'label', 'key' );
+    }
+
     $builtins = array_column( clu_default_register_fields(), null, 'key' );
     $fields   = [];
 
@@ -104,6 +110,11 @@ function clu_normalize_register_fields( $rows ) {
 
         if ( isset( $builtins[ $key ] ) ) {
             $field['type'] = $builtins[ $key ]['type'];
+
+            // A label left at its English default follows the site's language.
+            if ( trim( (string) $field['label'] ) === '' || $field['label'] === $english[ $key ] ) {
+                $field['label'] = $builtins[ $key ]['label'];
+            }
         } elseif ( ! isset( clu_custom_field_types()[ $field['type'] ] ) ) {
             $field['type'] = 'text';
         }

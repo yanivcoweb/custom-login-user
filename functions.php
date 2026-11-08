@@ -220,7 +220,7 @@ function clu_get_page_url( $key, $fallback = '' ) {
 /* ─── Forms ──────────────────────────────────────────────────────────── */
 
 /**
- * Renders a template from the forms folder and returns the HTML.
+ * Renders a template and returns the HTML.
  *
  * @param string $template_name Template file name without .php.
  * @param mixed  $attributes    Data for the template, available to it as $attributes.
@@ -229,9 +229,51 @@ function clu_get_page_url( $key, $fallback = '' ) {
 function clu_get_template_html( $template_name, $attributes = [] ) {
     ob_start();
 
-    require CLU_PLUGIN_DIR . 'forms/' . $template_name . '.php';
+    require clu_locate_template( $template_name );
 
     return ob_get_clean();
+}
+
+/**
+ * Returns the file of a template: a copy in the theme's custom-login-users folder, child
+ * theme first, or the plugin's own in its forms folder.
+ *
+ * @param string $template_name Template file name without .php.
+ * @return string
+ */
+function clu_locate_template( $template_name ) {
+    $own  = CLU_PLUGIN_DIR . 'forms/' . $template_name . '.php';
+    $path = locate_template( [ 'custom-login-users/' . $template_name . '.php' ] );
+
+    /**
+     * Filters the file a template is rendered from.
+     *
+     * @param string $path          The theme's copy, or the plugin's own file.
+     * @param string $template_name Such as form_login.
+     */
+    $path = (string) apply_filters( 'clu_template_path', $path !== '' ? $path : $own, $template_name );
+
+    return is_readable( $path ) ? $path : $own;
+}
+
+/**
+ * Returns the templates the active theme replaces, for the settings screen.
+ *
+ * @return string[] Template name => path in the theme.
+ */
+function clu_theme_template_overrides() {
+    $overrides = [];
+
+    foreach ( glob( CLU_PLUGIN_DIR . 'forms/*.php' ) as $file ) {
+        $name = basename( $file, '.php' );
+        $path = clu_locate_template( $name );
+
+        if ( wp_normalize_path( $path ) !== wp_normalize_path( $file ) ) {
+            $overrides[ $name ] = $path;
+        }
+    }
+
+    return $overrides;
 }
 
 /**
@@ -243,29 +285,48 @@ function clu_get_template_html( $template_name, $attributes = [] ) {
  * @return string
  */
 function clu_form_text( $option_name, $key ) {
-    static $defaults = null;
+    static $english    = null;
+    static $translated = [];
 
-    if ( $defaults === null ) {
-        $defaults = [];
+    if ( $english === null ) {
+        $english = clu_untranslated( 'clu_form_text_defaults' );
+    }
 
-        foreach ( clu_get_settings_tabs() as $tab ) {
-            if ( empty( $tab['option_name'] ) ) {
-                continue;
-            }
+    $locale = get_locale();
 
-            foreach ( include $tab['fields_file'] as $field ) {
-                $defaults[ $tab['option_name'] ][ $field['field'] ] = $field['default'];
-            }
-        }
+    if ( ! isset( $translated[ $locale ] ) ) {
+        $translated[ $locale ] = clu_form_text_defaults();
     }
 
     $options = get_option( $option_name );
+    $saved   = is_array( $options ) && isset( $options[ $key ] ) ? (string) $options[ $key ] : '';
 
-    if ( is_array( $options ) && isset( $options[ $key ] ) && $options[ $key ] !== '' ) {
-        return $options[ $key ];
+    if ( clu_is_custom_text( $saved, $english[ $option_name ][ $key ] ?? '' ) ) {
+        return $saved;
     }
 
-    return $defaults[ $option_name ][ $key ] ?? '';
+    return $translated[ $locale ][ $option_name ][ $key ] ?? '';
+}
+
+/**
+ * Returns the defaults of the fields on the settings tabs, in the current language.
+ *
+ * @return array Option name => field => default.
+ */
+function clu_form_text_defaults() {
+    $defaults = [];
+
+    foreach ( clu_get_settings_tabs() as $tab ) {
+        if ( empty( $tab['option_name'] ) ) {
+            continue;
+        }
+
+        foreach ( include $tab['fields_file'] as $field ) {
+            $defaults[ $tab['option_name'] ][ $field['field'] ] = $field['default'];
+        }
+    }
+
+    return $defaults;
 }
 
 /**
@@ -480,6 +541,40 @@ function clu_get_set_password_url( $user, $key ) {
 }
 
 /**
+ * Sends a plugin email in the language of whoever receives it: the user's, or the
+ * site's for the admin. The text is built only after the switch, so that the default
+ * texts come in that language. Right-to-left languages get a right-to-left email.
+ *
+ * @param string|string[] $to
+ * @param callable        $build     Returns [ subject, HTML body ].
+ * @param WP_User|null    $recipient The user it goes to; null for the admin.
+ * @param array|null      $headers   Defaults to the plugin's sender, or info@ the site.
+ * @return bool Whether the email went out.
+ */
+function clu_send_mail( $to, $build, $recipient = null, $headers = null ) {
+    $switched = switch_to_locale( $recipient instanceof WP_User ? get_user_locale( $recipient ) : get_locale() );
+
+    list( $subject, $message ) = $build();
+
+    if ( is_rtl() ) {
+        $message = '<div dir="rtl" style="text-align:right;">' . $message . '</div>';
+    }
+
+    if ( $headers === null ) {
+        $mail_host = clu_get_mail_host();
+        $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
+    }
+
+    $sent = (bool) wp_mail( $to, $subject, $message, $headers );
+
+    if ( $switched ) {
+        restore_previous_locale();
+    }
+
+    return $sent;
+}
+
+/**
  * Acts on an account made in the pending role. The plugin's own form makes accounts
  * that still have to confirm their address in another role, and sends the link itself.
  */
@@ -491,59 +586,78 @@ function clu_on_user_register( $user_id ) {
         return;
     }
 
+    // An account made by someone who manages users is left in the role they chose.
+    $made_by_admin = current_user_can( 'create_users' );
+
     // A sign-up from another form, such as the one built into WordPress when the pending
-    // role is the site's default role. Not an account made by someone who manages users.
-    if ( clu_email_confirmation_is_on() && ! current_user_can( 'create_users' ) ) {
+    // role is the site's default role.
+    if ( clu_email_confirmation_is_on() && ! $made_by_admin ) {
         clu_ask_to_confirm_email( $user );
         return;
     }
 
-    clu_send_registration_emails( $user );
+    clu_send_registration_emails( $user, ! $made_by_admin );
 }
 
 /**
- * Sends the emails of a registration that now waits for approval: to the admin, and
- * to the user if the site wants them told.
+ * Tells whether new users are approved without waiting for an admin. Set on the User
+ * Roles tab.
+ *
+ * @return bool
+ */
+function clu_auto_approve_is_on() {
+    return get_option( 'clu_auto_approve' ) === '1';
+}
+
+/**
+ * Acts on a registration that now waits for approval: tells the admin, and the user if
+ * the site wants them told. With automatic approval, approves it instead, which sends
+ * the set-password email, and tells the admin it was done.
  *
  * @param WP_User $user
+ * @param bool    $may_approve Whether automatic approval may apply to this account.
  */
-function clu_send_registration_emails( $user ) {
+function clu_send_registration_emails( $user, $may_approve = true ) {
+    if ( $may_approve && clu_auto_approve_is_on() ) {
+        $user->set_role( clu_get_role_slug( 'approved_role' ) );
+        clu_send_new_user_email( get_userdata( $user->ID ), true );
+        return;
+    }
+
     clu_send_new_user_email( $user );
     clu_send_received_email( $user );
 }
 
 /**
- * Tells the site admin that a user is waiting for approval.
+ * Tells the site admin about a new user: waiting for approval, or approved already.
  *
  * @param WP_User $user
+ * @param bool    $approved Whether the user was approved automatically.
  */
-function clu_send_new_user_email( $user ) {
-    $mail_host = clu_get_mail_host();
-    $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
-    $name      = esc_html( $user->display_name );
-    $edit_url  = clu_normalize_site_url( add_query_arg( 'user_id', $user->ID, admin_url( 'user-edit.php' ) ) ) . '#role';
-    $list_url  = clu_normalize_site_url( admin_url( clu_pending_list_path() ) );
+function clu_send_new_user_email( $user, $approved = false ) {
+    clu_send_mail( clu_get_admin_notification_recipients(), function () use ( $user, $approved ) {
+        $name     = esc_html( $user->display_name );
+        $edit_url = clu_normalize_site_url( add_query_arg( 'user_id', $user->ID, admin_url( 'user-edit.php' ) ) ) . '#role';
+        $list_url = clu_normalize_site_url( admin_url( clu_pending_list_path() ) );
+        $prefix   = $approved ? 'notify_auto' : 'notify_client';
 
-    $message = clu_format_message_template(
-        clu_get_message( 'notify_client_body' ),
-        [
-            '%1$s'                 => $name,
-            '%2$s'                 => $edit_url,
-            '{display_name}'       => $name,
-            '{user_details}'       => clu_format_user_details( clu_get_user_details( $user ) ),
-            '{edit_user_url}'      => $edit_url,
-            '{edit_user_link}'     => clu_message_link( $edit_url, clu_get_message( 'email_edit_user_text' ) ),
-            '{pending_users_url}'  => $list_url,
-            '{pending_users_link}' => clu_message_link( $list_url, clu_get_message( 'email_pending_list_text' ) ),
-        ]
-    );
-
-    wp_mail(
-        clu_get_admin_notification_recipients(),
-        clu_format_subject( 'notify_client_subject', $user->display_name ),
-        $message,
-        $headers
-    );
+        return [
+            clu_format_subject( $prefix . '_subject', $user->display_name ),
+            clu_format_message_template(
+                clu_get_message( $prefix . '_body' ),
+                [
+                    '%1$s'                 => $name,
+                    '%2$s'                 => $edit_url,
+                    '{display_name}'       => $name,
+                    '{user_details}'       => clu_format_user_details( clu_get_user_details( $user ) ),
+                    '{edit_user_url}'      => $edit_url,
+                    '{edit_user_link}'     => clu_message_link( $edit_url, clu_get_message( 'email_edit_user_text' ) ),
+                    '{pending_users_url}'  => $list_url,
+                    '{pending_users_link}' => clu_message_link( $list_url, clu_get_message( 'email_pending_list_text' ) ),
+                ]
+            ),
+        ];
+    } );
 }
 
 /**
@@ -593,19 +707,14 @@ function clu_send_received_email( $user ) {
         return;
     }
 
-    $mail_host = clu_get_mail_host();
-    $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
-    $name      = esc_html( $user->display_name );
+    clu_send_mail( $user->user_email, function () use ( $user ) {
+        $name = esc_html( $user->display_name );
 
-    $message = clu_format_message_template(
-        clu_get_message( 'notify_received_body' ),
-        [
-            '%1$s'           => $name,
-            '{display_name}' => $name,
-        ]
-    );
-
-    wp_mail( $user->user_email, clu_format_subject( 'notify_received_subject', $user->display_name ), $message, $headers );
+        return [
+            clu_format_subject( 'notify_received_subject', $user->display_name ),
+            clu_format_message_template( clu_get_message( 'notify_received_body' ), [ '%1$s' => $name, '{display_name}' => $name ] ),
+        ];
+    }, $user );
 }
 
 /**
@@ -627,19 +736,16 @@ function clu_send_rejection_email( $user_id ) {
         return;
     }
 
-    $mail_host = clu_get_mail_host();
-    $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
-    $name      = esc_html( $user->display_name );
+    $sent = clu_send_mail( $user->user_email, function () use ( $user ) {
+        $name = esc_html( $user->display_name );
 
-    $message = clu_format_message_template(
-        clu_get_message( 'notify_rejected_body' ),
-        [
-            '%1$s'           => $name,
-            '{display_name}' => $name,
-        ]
-    );
+        return [
+            clu_format_subject( 'notify_rejected_subject', $user->display_name ),
+            clu_format_message_template( clu_get_message( 'notify_rejected_body' ), [ '%1$s' => $name, '{display_name}' => $name ] ),
+        ];
+    }, $user );
 
-    if ( ! wp_mail( $user->user_email, clu_format_subject( 'notify_rejected_subject', $user->display_name ), $message, $headers ) ) {
+    if ( ! $sent ) {
         do_action( 'clu_decision_mail_failed', $user );
     }
 }
@@ -666,23 +772,26 @@ function clu_send_set_password_email( $user_id ) {
     // Must come after the key: generating any key clears this flag.
     update_user_meta( $user->ID, 'clu_approval_link', 1 );
 
-    $mail_host = clu_get_mail_host();
-    $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
-    $name      = esc_html( $user->display_name );
-    $url       = clu_get_set_password_url( $user, $key );
+    $sent = clu_send_mail( $user->user_email, function () use ( $user, $key ) {
+        $name = esc_html( $user->display_name );
+        $url  = clu_get_set_password_url( $user, $key );
 
-    $message = clu_format_message_template(
-        clu_get_message( 'notify_user_body' ),
-        [
-            '%1$s'                => $name,
-            '%2$s'                => $url,
-            '{display_name}'      => $name,
-            '{set_password_url}'  => $url,
-            '{set_password_link}' => clu_message_link( $url, clu_get_message( 'email_link_text' ) ),
-        ]
-    );
+        return [
+            clu_format_subject( 'notify_user_subject', $user->display_name ),
+            clu_format_message_template(
+                clu_get_message( 'notify_user_body' ),
+                [
+                    '%1$s'                => $name,
+                    '%2$s'                => $url,
+                    '{display_name}'      => $name,
+                    '{set_password_url}'  => $url,
+                    '{set_password_link}' => clu_message_link( $url, clu_get_message( 'email_link_text' ) ),
+                ]
+            ),
+        ];
+    }, $user );
 
-    if ( ! wp_mail( $user->user_email, clu_format_subject( 'notify_user_subject', $user->display_name ), $message, $headers ) ) {
+    if ( ! $sent ) {
         /**
          * Fires when an email about an approval or a rejection could not be sent.
          *

@@ -239,6 +239,7 @@ jQuery(function ($) {
             nonce: config.rolesNonce,
             pending_role: $('#clu-pending-role').val(),
             approved_role: $('#clu-approved-role').val(),
+            auto_approve: $('#clu-auto-approve').is(':checked') ? '1' : '',
         }, reportMessage($result));
     });
 

@@ -52,26 +52,24 @@ function clu_handle_ajax_password_lost() {
         wp_send_json_error( [ 'message' => clu_render_message( 'general_error' ) ] );
     }
 
-    $name      = esc_html( $user->display_name );
-    $reset_url = clu_get_set_password_url( $user, $reset_key );
+    $reset_url  = clu_get_set_password_url( $user, $reset_key );
+    $email_sent = clu_send_mail( $user->user_email, function () use ( $user, $reset_url ) {
+        $name = esc_html( $user->display_name );
 
-    $email_message = clu_format_message_template(
-        clu_get_message( 'reset_email_body' ),
-        [
-            '%1$s'           => $name,
-            '%2$s'           => $reset_url,
-            '{display_name}' => $name,
-            '{reset_url}'    => $reset_url,
-            '{reset_link}'   => clu_message_link( $reset_url, clu_get_message( 'email_link_text' ) ),
-        ]
-    );
-
-    $email_sent = wp_mail(
-        $user->user_email,
-        clu_get_message( 'reset_email_subject' ),
-        $email_message,
-        clu_get_mail_headers()
-    );
+        return [
+            clu_get_message( 'reset_email_subject' ),
+            clu_format_message_template(
+                clu_get_message( 'reset_email_body' ),
+                [
+                    '%1$s'           => $name,
+                    '%2$s'           => $reset_url,
+                    '{display_name}' => $name,
+                    '{reset_url}'    => $reset_url,
+                    '{reset_link}'   => clu_message_link( $reset_url, clu_get_message( 'email_link_text' ) ),
+                ]
+            ),
+        ];
+    }, $user, clu_get_mail_headers() );
 
     if ( ! $email_sent ) {
         wp_send_json_error( [ 'message' => clu_render_message( 'reset_email_send_failed' ) ] );

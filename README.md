@@ -3,7 +3,7 @@
 A WordPress plugin that adds front-end pages for login, registration, password reset and account details, with an admin approval step for new users.
 
 **Author:** Yaniv Sasson
-**Version:** 1.6.0
+**Version:** 1.7.0
 
 ---
 
@@ -16,6 +16,9 @@ A WordPress plugin that adds front-end pages for login, registration, password r
 - Admin notification email on new registrations with what the user filled in, an email with a set-password link upon approval, and a rejection email
 - Optional emails to new users: a link that confirms their address before the registration reaches the admin, and a note that the registration was received
 - Every label and message can be edited in the settings, so the forms work in any language, including right-to-left
+- Hebrew built in: on a site in Hebrew, the forms, messages and emails come in Hebrew without typing them. Other languages can be added with a translation file
+- Optional automatic approval, for sites that want sign-ups without waiting for an admin
+- A theme can replace the HTML of any form with its own copy
 - Configurable password rules (min length, uppercase, lowercase, numbers, symbols)
 - Custom user roles: `Pending User`, `Approved User` and `Rejected User`, and `Unconfirmed User` on sites that ask for the address to be confirmed, all kept out of the WordPress dashboard
 - Protection against spam and abuse: a hidden bot trap and a limit on the registration form, a limit on reset emails, and the same answer for known and unknown accounts on the login and lost-password forms
@@ -55,6 +58,8 @@ The login form honours `?redirect_to=` for addresses on the same site.
 Rejecting moves the user to the **Rejected User** role and emails them. They cannot log in or reset a password, and they cannot register again with the same address. The account stays, so a mistake can be undone with **Approve**, which sends the set-password email. To remove someone without an email, such as a bot, use the normal **Delete** link.
 
 Registration follows the WordPress setting **Settings > General > Anyone can register**. When it is off, the form and its AJAX endpoint are both closed.
+
+**Automatic approval.** On the **User Roles** tab, **Approve new users automatically** skips the wait: a new user gets the set-password email at once, and the admin gets an email about each one. With the email confirmation on, this happens once the address is confirmed. Users already waiting stay in the list. On a site open to everyone, use it together with the email confirmation and a bot check, or bots get working accounts.
 
 ---
 
@@ -165,6 +170,27 @@ What this does not cover:
 
 ---
 
+## Languages
+
+The default texts of the forms, the messages and the emails follow the site's language, under **Settings > General**. The plugin comes with Hebrew.
+
+- A text you wrote in the settings stays as you wrote it. A text left at its default, including one saved as it was by an older version, shows in the site's language
+- Emails go in the language of whoever gets them: the user's own language if they chose one in their profile, or the site's. In a right-to-left language the email is right to left too
+- The settings screen itself stays in English
+- The country and region lists, and the choices of Customer Type, stay in English
+
+**Another language:** copy `languages/custom-login-users.pot`, translate it with Poedit or Loco Translate, and put the files in `wp-content/languages/plugins`, where an update does not touch them. A file there comes before the plugin's own.
+
+---
+
+## Templates
+
+To change the HTML of a form, copy its file from the plugin's `forms` folder to a `custom-login-users` folder in the theme, and edit the copy. A child theme's copy comes first, and the `clu_template_path` filter can point anywhere else. The **Setup Pages** tab lists the copies the theme has.
+
+After updating the plugin, compare the copies with its new files: a copy keeps the old form, without what the update added, such as the bot check or a new field.
+
+---
+
 ## Register Fields
 
 On **Settings > Custom Login Users > Register Fields**, each field has:
@@ -217,6 +243,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 | `clu_send_received_email` | Decide whether a user gets the registration received email. Receives the Mail tab setting and the user |
 | `clu_email_confirm_lifetime` | Seconds a link that confirms an email address stays valid |
 | `clu_login_limit` | The limit on failed logins: an array with `on`, `attempts`, and `window` in seconds |
+| `clu_template_path` | The file a form is rendered from. Receives the path and the template name, such as `form_login` |
 | `clu_region_countries` | The regions and countries of the Region and Country fields |
 | `clu_user_can_view_restricted` | Decide who sees restricted content, for example to let in a role that was on the site before the approval flow. Receives the answer, the user and the post ID, which is 0 for restricted content in general |
 | `clu_restrictable_post_types` | The post types that offer the Access box |
@@ -247,6 +274,20 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.7.0
+
+Before updating a live site
+
+- On a site in Hebrew, texts left at their English defaults now show in Hebrew: the forms, the messages and the emails. Texts written in the settings stay as they are. Check the forms after the update.
+- Emails to users go in their own language, or the site's, rather than in the language of the admin who approved them.
+
+Added
+
+- Hebrew translation, and the plugin can be translated into other languages.
+- **Approve new users automatically**, off by default, on the User Roles tab.
+- Templates: a theme can replace the HTML of any form. The Setup Pages tab lists its copies.
+- Saving the Messages tab or a form tab no longer stores the defaults, so they keep following the language and later versions.
 
 ### 1.6.0
 

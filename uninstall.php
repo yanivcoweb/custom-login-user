@@ -16,6 +16,7 @@ $clu_options = [
     'clu_register_fields',
     'clu_replace_wp_login',
     'clu_security',
+    'clu_auto_approve',
     'clu_login_form',
     'clu_password_reset_form',
     'clu_password_lost_form',

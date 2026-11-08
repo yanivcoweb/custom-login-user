@@ -16,7 +16,7 @@ function clu_handle_ajax_register() {
     }
 
     $confirm = clu_email_confirmation_is_on();
-    $success = [ 'message' => clu_render_message( $confirm ? 'register_confirm_sent' : 'register_success' ) ];
+    $success = [ 'message' => clu_render_message( $confirm ? 'register_confirm_sent' : ( clu_auto_approve_is_on() ? 'register_success_auto' : 'register_success' ) ) ];
 
     // Trap field, hidden from people. Bots get the normal answer and nothing is created.
     if ( clu_post_text( 'clu_website' ) !== '' ) {

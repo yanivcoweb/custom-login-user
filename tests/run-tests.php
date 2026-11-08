@@ -65,6 +65,9 @@ if ( $bare ) {
     $preinit['template']   = [ 10 => [ [ 'function' => $fake, 'accepted_args' => 0 ] ] ];
     $preinit['stylesheet'] = [ 10 => [ [ 'function' => $fake, 'accepted_args' => 0 ] ] ];
 }
+// English, whatever the site's language, so that the texts compared below are known.
+// The Hebrew tests switch to it on their own.
+$preinit['locale'] = [ 10 => [ [ 'function' => function () { return 'en_US'; }, 'accepted_args' => 0 ] ] ];
 $GLOBALS['wp_filter'] = $preinit;
 
 require $argv[1];
@@ -218,7 +221,7 @@ function approved_role() { return clu_get_role_slug( 'approved_role' ); }
 function reset_state() {
     wp_set_current_user( 0 );
     $GLOBALS['clu_mails'] = [];
-    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_pending_count', 'clu_replace_wp_login', 'clu_security' ] as $o ) {
+    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_login_form', 'clu_pending_count', 'clu_replace_wp_login', 'clu_security', 'clu_auto_approve' ] as $o ) {
         delete_option( $o );
     }
     delete_transient( 'clu_pending_count' );
@@ -2065,7 +2068,181 @@ section( '25. Login protection' );
 }
 
 reset_state();
-section( '26. Nonces, templates, settings, update and uninstall' );
+section( '26. Per site: templates, automatic approval, languages' );
+{
+    $plain = function ( $key ) { return trim( wp_strip_all_tags( clu_get_message( $key ) ) ); };
+    $admin = get_option( 'admin_email' );
+
+    // Templates from the theme.
+    $dir = wp_normalize_path( trailingslashit( sys_get_temp_dir() ) . 'clu-theme-' . wp_generate_password( 6, false ) );
+    mkdir( $dir . '/custom-login-users', 0777, true );
+    file_put_contents( $dir . '/custom-login-users/form_login.php', '<?php defined( "ABSPATH" ) || exit; ?><div class="theme-login">THEME LOGIN <?php echo esc_url( $attributes["redirect"] ); ?></div>' );
+    $paths_were = [ $GLOBALS['wp_stylesheet_path'] ?? null, $GLOBALS['wp_template_path'] ?? null ];
+    $GLOBALS['wp_stylesheet_path'] = $dir;
+    $GLOBALS['wp_template_path']   = $dir;
+    $html = render_shortcode_safe( $SC_LOGIN, [ 'redirect_to' => home_url( '/clu-after/' ) ] );
+    t( 'a copy in the theme replaces the form', strpos( $html, 'THEME LOGIN' ) !== false && strpos( $html, 'id="loginform"' ) === false, substr( $html, 0, 200 ) );
+    t( 'and gets the same data', strpos( $html, home_url( '/clu-after/' ) ) !== false );
+    t( 'the other forms stay the plugin\'s', strpos( render_shortcode_safe( $SC_REG ), 'id="signupform"' ) !== false );
+    t( 'the settings know which forms the theme replaces', array_keys( clu_theme_template_overrides() ) === [ 'form_login' ] );
+    ob_start();
+    clu_render_setup_pages_tab();
+    $tab = ob_get_clean();
+    t( 'and the Setup Pages tab lists them', strpos( $tab, '<code>form_login.php</code>' ) !== false );
+    $GLOBALS['wp_stylesheet_path'] = $paths_were[0];
+    $GLOBALS['wp_template_path']   = $paths_were[1];
+    $to_theme = function ( $path, $name ) use ( $dir ) { return $name === 'form_register' ? $dir . '/custom-login-users/form_login.php' : $path; };
+    add_filter( 'clu_template_path', $to_theme, 10, 2 );
+    t( 'a filter can point a form at another file', strpos( render_shortcode_safe( $SC_REG ), 'THEME LOGIN' ) !== false );
+    remove_filter( 'clu_template_path', $to_theme, 10 );
+    $nowhere = function () { return '/no/such/file.php'; };
+    add_filter( 'clu_template_path', $nowhere );
+    t( 'a file that is not there falls back to the plugin\'s', strpos( render_shortcode_safe( $SC_REG ), 'id="signupform"' ) !== false );
+    remove_filter( 'clu_template_path', $nowhere );
+    unlink( $dir . '/custom-login-users/form_login.php' );
+    rmdir( $dir . '/custom-login-users' );
+    rmdir( $dir );
+    t( 'without copies the theme replaces nothing', clu_theme_template_overrides() === [] );
+
+    // Automatic approval.
+    $waiting = make_user( 'clu_auto_waiting', 'clu-auto-waiting@example.test', 'Start1!pass', pending_role() );
+    $count   = clu_get_pending_count();
+    update_option( 'clu_auto_approve', '1' );
+    update_option( 'clu_mail', [ 'notify_received' => '1' ] );
+    $GLOBALS['clu_mails'] = [];
+    $email = 'clu-auto@example.test';
+    $res   = register( [ 'email' => $email ] );
+    $u     = get_user_by( 'email', $email );
+    t( 'with automatic approval a sign-up is approved at once', ! empty( $res['success'] ) && $u && in_array( approved_role(), $u->roles, true ), $u ? implode( ',', $u->roles ) : msg( $res ) );
+    t( 'the form says the email is on its way', msg( $res ) === $plain( 'register_success_auto' ), msg( $res ) );
+    $to_user = mails_to( $email );
+    t( 'the user gets the set-password email, and not the received one', count( $to_user ) === 1 && strpos( $to_user[0]['message'], 'key=' ) !== false, print_r( array_column( $to_user, 'subject' ), true ) );
+    $to_admin = mails_to( $admin );
+    t( 'the admin hears that it was approved, with the details', count( $to_admin ) === 1 && $to_admin[0]['subject'] === 'Website: New user ' . $u->display_name && strpos( $to_admin[0]['message'], 'approved automatically' ) !== false && strpos( $to_admin[0]['message'], 'Acme' ) !== false, print_r( array_column( $to_admin, 'subject' ), true ) );
+    t( 'nobody is left waiting', clu_get_pending_count() === $count );
+
+    update_option( 'clu_mail', [ 'confirm_email' => '1' ] );
+    $GLOBALS['clu_mails'] = [];
+    $email = 'clu-auto-confirm@example.test';
+    register( [ 'email' => $email ] );
+    $u = get_user_by( 'email', $email );
+    t( 'with the email confirmation on, it waits for the address first', clu_user_is_unconfirmed( $u ) && count( mails_to( $email ) ) === 1 && ! mails_to( $admin ) );
+    $link = confirm_link_of( $email );
+    $GLOBALS['clu_mails'] = [];
+    $to = open_confirm_link( $link );
+    $u  = get_userdata( $u->ID );
+    t( 'and is approved once it is confirmed', in_array( approved_role(), $u->roles, true ) && count( mails_to( $email ) ) === 1 && strpos( mails_to( $email )[0]['message'], 'key=' ) !== false && count( mails_to( $admin ) ) === 1, implode( ',', $u->roles ) . ' / ' . print_r( array_column( $GLOBALS['clu_mails'], 'subject' ), true ) );
+    t( 'the page after the link says the email is on its way', strpos( $to, 'set your password' ) !== false, $to );
+    t( 'and the register page says so too', strpos( render_shortcode_safe( $SC_REG, [ 'clu_email_confirmed' => 'confirmed' ] ), 'link to set your password' ) !== false );
+    update_option( 'clu_mail', [] );
+
+    $GLOBALS['clu_mails'] = [];
+    $core_id = register_new_user( 'clu_auto_core', 'clu-auto-core@example.test' );
+    add_action( 'register_new_user', 'wp_send_new_user_notifications' );
+    t( 'a sign-up on the form built into WordPress is approved too', ! is_wp_error( $core_id ) && in_array( approved_role(), get_userdata( $core_id )->roles, true ) && count( mails_to( 'clu-auto-core@example.test' ) ) === 1 );
+
+    t( 'users already waiting stay in the list', clu_user_is_pending( get_userdata( $waiting ) ) );
+    wp_set_current_user( 1 );
+    $by_admin = make_user( 'clu_auto_by_admin', 'clu-auto-by-admin@example.test', 'Start1!pass', pending_role() );
+    wp_set_current_user( 0 );
+    t( 'an account an admin makes in the pending role stays pending', clu_user_is_pending( get_userdata( $by_admin ) ) );
+
+    wp_set_current_user( 1 );
+    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => pending_role(), 'approved_role' => approved_role(), 'auto_approve' => '' ], 1 );
+    t( 'the User Roles tab turns it off', ! empty( $res['success'] ) && ! clu_auto_approve_is_on(), msg( $res ) );
+    wp_set_current_user( 1 );
+    $res = ajax( 'clu_save_roles', [ 'nonce' => wp_create_nonce( 'clu_roles_nonce' ), 'pending_role' => pending_role(), 'approved_role' => approved_role(), 'auto_approve' => '1' ], 1 );
+    t( 'and on', ! empty( $res['success'] ) && clu_auto_approve_is_on(), msg( $res ) );
+    wp_set_current_user( 1 );
+    ob_start();
+    clu_render_roles_tab();
+    $tab = ob_get_clean();
+    t( 'where it shows as ticked', (bool) preg_match( '/id="clu-auto-approve" value="1"\s+checked/', $tab ) );
+    wp_set_current_user( 0 );
+    delete_option( 'clu_auto_approve' );
+    $GLOBALS['clu_mails'] = [];
+    register( [ 'email' => 'clu-auto-off@example.test' ] );
+    t( 'with it off, sign-ups wait again', clu_user_is_pending( get_user_by( 'email', 'clu-auto-off@example.test' ) ) );
+
+    // Languages.
+    $english = clu_default_messages();
+    t( 'the tests run in English', get_locale() === 'en_US' && clu_get_message( 'login_failed' ) === 'The username, email or password is incorrect.' );
+    $hebrew_ok = switch_to_locale( 'he_IL' );
+
+    if ( ! $hebrew_ok ) {
+        t( 'Hebrew can be tested here (WordPress in Hebrew must be installed)', false, 'switch_to_locale(he_IL) failed' );
+    } else {
+        $hebrew = clu_default_messages();
+        t( 'in Hebrew the messages come in Hebrew', clu_get_message( 'login_failed' ) === 'שם המשתמש, האימייל או הסיסמה שגויים.', clu_get_message( 'login_failed' ) );
+        $same = array_keys( array_intersect_assoc( $hebrew, $english ) );
+        t( 'every message has a translation', ! $same, implode( ', ', $same ) );
+        $broken = [];
+        foreach ( $english as $key => $text ) {
+            preg_match_all( '/\{[a-z_]+\}|%\d?\$?[sd]/', $text, $a );
+            preg_match_all( '/\{[a-z_]+\}|%\d?\$?[sd]/', $hebrew[ $key ], $b );
+            sort( $a[0] );
+            sort( $b[0] );
+            if ( $a[0] !== $b[0] ) {
+                $broken[] = $key;
+            }
+        }
+        t( 'and keeps the placeholders of the English', ! $broken, implode( ', ', $broken ) );
+        t( 'so do the labels of the forms', clu_form_text( 'clu_login_form', 'login_button' ) === 'התחברות' );
+        $html = render_shortcode_safe( $SC_LOGIN );
+        t( 'which the login form shows', strpos( $html, 'value="התחברות"' ) !== false );
+        $labels = array_column( clu_get_register_fields(), 'label', 'key' );
+        t( 'a built-in field saved with its English label shows it in Hebrew', ( $labels['first_name'] ?? '' ) === 'שם פרטי' && ( $labels['company'] ?? '' ) === 'שם החברה', print_r( $labels, true ) );
+        update_option( 'clu_messages', [ 'login_failed' => $english['login_failed'], 'login_success' => 'ברוכים הבאים' ] );
+        t( 'a message saved as the English default shows in Hebrew', clu_get_message( 'login_failed' ) === $hebrew['login_failed'] );
+        t( 'a message an admin wrote stays as written', clu_get_message( 'login_success' ) === 'ברוכים הבאים' );
+        update_option( 'clu_login_form', [ 'login_button' => 'Log In', 'log_in_title' => 'Members' ] );
+        t( 'the same for the form texts', clu_form_text( 'clu_login_form', 'login_button' ) === 'התחברות' && clu_form_text( 'clu_login_form', 'log_in_title' ) === 'Members' );
+        delete_option( 'clu_messages' );
+        delete_option( 'clu_login_form' );
+        restore_previous_locale();
+    }
+    t( 'and back in English afterwards', clu_get_message( 'login_failed' ) === 'The username, email or password is incorrect.' && clu_form_text( 'clu_login_form', 'login_button' ) === 'Log In' );
+
+    if ( $hebrew_ok ) {
+        $he_user = make_user( 'clu_he_user', 'clu-he-user@example.test', 'Start1!pass', pending_role() );
+        update_user_meta( $he_user, 'locale', 'he_IL' );
+        $GLOBALS['clu_mails'] = [];
+        get_userdata( $he_user )->set_role( approved_role() );
+        $m = mails_to( 'clu-he-user@example.test' );
+        t( 'a user who chose Hebrew gets the email in Hebrew', count( $m ) === 1 && strpos( $m[0]['subject'], 'החשבון אושר' ) === 0, print_r( array_column( $m, 'subject' ), true ) );
+        t( 'written right to left', count( $m ) === 1 && strpos( $m[0]['message'], '<div dir="rtl"' ) === 0 );
+        t( 'while the site stays in English', get_locale() === 'en_US' && clu_get_message( 'login_failed' ) === 'The username, email or password is incorrect.' );
+        $GLOBALS['clu_mails'] = [];
+        register( [ 'email' => 'clu-en-user@example.test' ] );
+        $m = mails_to( $admin );
+        t( 'the admin email goes in the site\'s language', count( $m ) === 1 && strpos( $m[0]['subject'], 'Website: New registration' ) === 0 && strpos( $m[0]['message'], 'dir="rtl"' ) === false );
+    }
+
+    // Saving does not store the defaults.
+    wp_set_current_user( 1 );
+    $res   = ajax( 'clu_save_messages', [ 'nonce' => wp_create_nonce( 'clu_messages_nonce' ), 'login_failed' => $english['login_failed'], 'login_success' => 'Welcome back' ], 1 );
+    $saved = get_option( 'clu_messages' );
+    t( 'saving the Messages tab stores only what was changed', ! empty( $res['success'] ) && $saved === [ 'login_success' => 'Welcome back' ], print_r( $saved, true ) );
+    if ( ! function_exists( 'add_settings_section' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/template.php';
+    }
+    clu_register_settings();
+    $clean = sanitize_option( 'clu_login_form', [ 'login_button' => 'Log In', 'log_in_title' => 'Members' ] );
+    t( 'so does saving a form tab', ( $clean['login_button'] ?? 'x' ) === '' && ( $clean['log_in_title'] ?? '' ) === 'Members', print_r( $clean, true ) );
+    ob_start();
+    do_settings_sections( 'login-form-group' );
+    $tab = ob_get_clean();
+    t( 'which still shows the default in the field', strpos( $tab, "value='Log In'" ) !== false );
+    foreach ( clu_get_settings_tabs() as $tab_def ) {
+        if ( ! empty( $tab_def['option_name'] ) ) {
+            remove_all_filters( 'sanitize_option_' . $tab_def['option_name'] );
+        }
+    }
+    wp_set_current_user( 0 );
+}
+
+reset_state();
+section( '27. Nonces, templates, settings, update and uninstall' );
 {
     $res = ajax( 'clu_refresh_nonce', [ 'field' => 'login_nonce' ] );
     wp_set_current_user( 0 );
@@ -2179,6 +2356,7 @@ section( '26. Nonces, templates, settings, update and uninstall' );
     update_option( 'clu_mail', [ 'from_name' => 'x' ] );
     update_option( 'clu_replace_wp_login', '1' );
     update_option( 'clu_security', [ 'limit_logins' => '1' ] );
+    update_option( 'clu_auto_approve', '1' );
     foreach ( [ 'pending_user', 'approved_user', 'rejected_user', 'unconfirmed_user' ] as $r ) {
         foreach ( get_users( [ 'role' => $r, 'fields' => 'ID' ] ) as $uid ) {
             get_userdata( $uid )->set_role( 'subscriber' );
@@ -2193,12 +2371,13 @@ section( '26. Nonces, templates, settings, update and uninstall' );
     t( 'uninstall removes the field list', get_option( 'clu_register_fields', 'gone' ) === 'gone' );
     t( 'uninstall removes the replacement setting', get_option( 'clu_replace_wp_login', 'gone' ) === 'gone' );
     t( 'uninstall removes the login protection settings', get_option( 'clu_security', 'gone' ) === 'gone' );
+    t( 'uninstall removes the automatic approval setting', get_option( 'clu_auto_approve', 'gone' ) === 'gone' );
     t( 'uninstall removes the flag on users', ! get_user_meta( $marker_id, 'clu_approval_link', true ) );
     t( 'uninstall removes what confirmed an address', ! get_user_meta( $marker_id, 'clu_email_confirm', true ) && ! get_user_meta( $marker_id, 'clu_email_confirmed', true ) );
     t( 'uninstall removes the flag on pages', get_post_meta( $marker_page, '_clu_restricted', true ) === '' );
 }
 
-section( '27. PHP warnings raised from inside the plugin during all of the above' );
+section( '28. PHP warnings raised from inside the plugin during all of the above' );
 $warnings = array_values( array_unique( $GLOBALS['clu_php_warnings'] ) );
 t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", array_slice( $warnings, 0, 12 ) ) );
 

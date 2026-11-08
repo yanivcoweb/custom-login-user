@@ -1,0 +1,550 @@
+# Hebrew translation of Custom Login Users.
+# Copy this file as the start of another language, or use Loco Translate.
+msgid ""
+msgstr ""
+"Project-Id-Version: Custom Login Users\n"
+"Report-Msgid-Bugs-To: https://github.com/yanivcoweb/custom-login-user/issues\n"
+"Language: he_IL\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Domain: custom-login-users\n"
+
+#. Plugin Name of the plugin
+#: custom-login-users.php
+msgid "Custom Login Users"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: custom-login-users.php
+msgid "https://github.com/yanivcoweb/custom-login-user"
+msgstr ""
+
+#. Description of the plugin
+#: custom-login-users.php
+msgid "Front-end login, registration, password and account pages, with an admin approval step for new users."
+msgstr "עמודי התחברות, הרשמה, סיסמה וחשבון באתר עצמו, עם שלב אישור של מנהל למשתמשים חדשים."
+
+#. Author of the plugin
+#: custom-login-users.php
+msgid "Yaniv Sasson"
+msgstr ""
+
+#. Author URI of the plugin
+#: custom-login-users.php
+msgid "https://yanivsasson.co.il/"
+msgstr ""
+
+#: forms/user_extra_fields.php:11
+msgid "Additional user information"
+msgstr "פרטים נוספים על המשתמש"
+
+#: options-page/arrays/array_login_form.php:10
+msgid "Login to Your Account"
+msgstr "התחברות לחשבון"
+
+#: options-page/arrays/array_login_form.php:16
+msgid "Email"
+msgstr "אימייל"
+
+#: options-page/arrays/array_login_form.php:22
+msgid "Password"
+msgstr "סיסמה"
+
+#: options-page/arrays/array_login_form.php:28
+msgid "Remember me"
+msgstr "זכור אותי"
+
+#: options-page/arrays/array_login_form.php:34
+msgid "Log In"
+msgstr "התחברות"
+
+#: options-page/arrays/array_login_form.php:40
+msgid "Forgot your password?"
+msgstr "שכחת את הסיסמה?"
+
+#: options-page/arrays/array_login_form.php:46
+#: options-page/arrays/array_password_lost_form.php:28
+msgid "Reset Password"
+msgstr "איפוס סיסמה"
+
+#: options-page/arrays/array_login_form.php:52
+#: options-page/arrays/array_my_account_form.php:88
+#: options-page/arrays/array_password_lost_form.php:34
+#: options-page/arrays/array_password_reset_form.php:34
+#: options-page/arrays/array_register_form.php:22
+msgid "Required field"
+msgstr "שדה חובה"
+
+#: options-page/arrays/array_my_account_form.php:10
+msgid "My Account"
+msgstr "החשבון שלי"
+
+#: options-page/arrays/array_my_account_form.php:16
+#: options-page/arrays/array_my_account_form.php:52
+msgid "Update Profile"
+msgstr "עדכון הפרטים"
+
+#: options-page/arrays/array_my_account_form.php:22
+#: src/register-fields.php:28
+msgid "First Name"
+msgstr "שם פרטי"
+
+#: options-page/arrays/array_my_account_form.php:28
+#: src/register-fields.php:29
+msgid "Last Name"
+msgstr "שם משפחה"
+
+#: options-page/arrays/array_my_account_form.php:34
+#: options-page/arrays/array_password_lost_form.php:22
+#: src/register-fields.php:30
+msgid "Email Address"
+msgstr "כתובת אימייל"
+
+#: options-page/arrays/array_my_account_form.php:40
+#: src/register-fields.php:31
+msgid "Company Name"
+msgstr "שם החברה"
+
+#: options-page/arrays/array_my_account_form.php:46
+msgid "Current password, to change the email address"
+msgstr "הסיסמה הנוכחית, לשינוי כתובת האימייל"
+
+#: options-page/arrays/array_my_account_form.php:58
+#: options-page/arrays/array_my_account_form.php:82
+msgid "Change Password"
+msgstr "שינוי סיסמה"
+
+#: options-page/arrays/array_my_account_form.php:64
+msgid "Current Password"
+msgstr "סיסמה נוכחית"
+
+#: options-page/arrays/array_my_account_form.php:70
+#: options-page/arrays/array_password_reset_form.php:16
+msgid "New Password"
+msgstr "סיסמה חדשה"
+
+#: options-page/arrays/array_my_account_form.php:76
+#: options-page/arrays/array_password_reset_form.php:22
+msgid "Confirm New Password"
+msgstr "אימות הסיסמה החדשה"
+
+#: options-page/arrays/array_my_account_form.php:94
+#: options-page/arrays/array_register_form.php:28
+msgid "Invalid email address"
+msgstr "כתובת אימייל לא תקינה"
+
+#: options-page/arrays/array_password_lost_form.php:10
+msgid "Reset Your Password"
+msgstr "איפוס הסיסמה"
+
+#: options-page/arrays/array_password_lost_form.php:16
+msgid "Please enter your email address below:"
+msgstr "נא להזין את כתובת האימייל שלך:"
+
+#: options-page/arrays/array_password_reset_form.php:10
+msgid "Choose Your New Password"
+msgstr "בחירת סיסמה חדשה"
+
+#: options-page/arrays/array_password_reset_form.php:28
+msgid "Set Password"
+msgstr "שמירת הסיסמה"
+
+#: options-page/arrays/array_register_form.php:10
+msgid "Register Now"
+msgstr "הרשמה"
+
+#: options-page/arrays/array_register_form.php:16
+#: src/messages-helper.php:151
+msgid "Register"
+msgstr "הרשמה"
+
+#: src/approvals.php:94
+#: src/approvals.php:116
+msgid "Approve"
+msgstr "אישור"
+
+#: src/approvals.php:95
+#: src/approvals.php:117
+msgid "Reject"
+msgstr "דחייה"
+
+#. translators: %d: number of users.
+#: src/approvals.php:203
+#, php-format
+msgid "%d user approved. A set-password email went out."
+msgid_plural "%d users approved. A set-password email went out to each."
+msgstr[0] "משתמש אחד אושר. נשלח אליו אימייל לבחירת סיסמה."
+msgstr[1] "%d משתמשים אושרו. לכל אחד מהם נשלח אימייל לבחירת סיסמה."
+
+#. translators: %d: number of users.
+#: src/approvals.php:208
+#, php-format
+msgid "%d user rejected."
+msgid_plural "%d users rejected."
+msgstr[0] "משתמש אחד נדחה."
+msgstr[1] "%d משתמשים נדחו."
+
+#. translators: %d: number of users.
+#: src/approvals.php:213
+#, php-format
+msgid "The email to %d user could not be sent, so they do not know about the decision yet."
+msgid_plural "The emails to %d users could not be sent, so they do not know about the decision yet."
+msgstr[0] "לא ניתן היה לשלוח את האימייל למשתמש אחד, ולכן הוא עדיין לא יודע על ההחלטה."
+msgstr[1] "לא ניתן היה לשלוח את האימיילים ל-%d משתמשים, ולכן הם עדיין לא יודעים על ההחלטה."
+
+#. translators: %d: number of users.
+#: src/approvals.php:218
+#, php-format
+msgid "%d user was skipped: not waiting for this decision, or you may not change their role."
+msgid_plural "%d users were skipped: not waiting for this decision, or you may not change their role."
+msgstr[0] "משתמש אחד דולג: הוא לא ממתין להחלטה הזו, או שאין לך הרשאה לשנות את התפקיד שלו."
+msgstr[1] "%d משתמשים דולגו: הם לא ממתינים להחלטה הזו, או שאין לך הרשאה לשנות את התפקיד שלהם."
+
+#: src/approvals.php:234
+msgid "Reject and send the rejection email?"
+msgstr "לדחות ולשלוח את אימייל הדחייה?"
+
+#: src/approvals.php:308
+msgid "Awaiting Approval"
+msgstr "ממתינים לאישור"
+
+#: src/content-access.php:260
+msgid "Access"
+msgstr "גישה"
+
+#: src/content-access.php:265
+msgid "This page holds a login, registration or password form, or is set on the Pages URL tab, so it stays open to everyone."
+msgstr "בעמוד הזה יש טופס התחברות, הרשמה או סיסמה, או שהוא מוגדר בלשונית Pages URL, ולכן הוא נשאר פתוח לכולם."
+
+#: src/content-access.php:274
+#: src/content-access.php:306
+msgid "Approved users only"
+msgstr "למשתמשים מאושרים בלבד"
+
+#: src/content-access.php:277
+msgid "Visitors are sent to the login page. This does not cover child pages or uploaded files."
+msgstr "מבקרים יופנו לעמוד ההתחברות. ההגבלה לא חלה על עמודי משנה ועל קבצים שהועלו."
+
+#. translators: %s: the reason.
+#: src/login-protection.php:344
+#, php-format
+msgid "Custom Login Users could not use the bot check (%s), so forms are let through without it. Check the keys on the Login Protection tab."
+msgstr "Custom Login Users לא הצליח להשתמש בבדיקת הבוטים (%s), ולכן הטפסים עוברים בלעדיה. כדאי לבדוק את המפתחות בלשונית Login Protection."
+
+#: src/messages-helper.php:89
+msgid "Invalid request."
+msgstr "הבקשה אינה תקינה."
+
+#: src/messages-helper.php:90
+msgid "An error occurred. Please try again later."
+msgstr "אירעה שגיאה. נא לנסות שוב מאוחר יותר."
+
+#: src/messages-helper.php:91
+msgid "Too many attempts. Please try again later."
+msgstr "יותר מדי ניסיונות. נא לנסות שוב מאוחר יותר."
+
+#: src/messages-helper.php:92
+msgid "Processing..."
+msgstr "רגע אחד..."
+
+#: src/messages-helper.php:95
+msgid "Login successful!"
+msgstr "התחברת בהצלחה!"
+
+#: src/messages-helper.php:96
+msgid "The username, email or password is incorrect."
+msgstr "שם המשתמש, האימייל או הסיסמה שגויים."
+
+#: src/messages-helper.php:98
+msgid "Too many failed login attempts. Please try again in {minutes} minutes."
+msgstr "יותר מדי ניסיונות התחברות שנכשלו. נא לנסות שוב בעוד {minutes} דקות."
+
+#: src/messages-helper.php:99
+msgid "Please confirm that you are not a robot, and try again."
+msgstr "נא לאשר שאינך רובוט ולנסות שוב."
+
+#: src/messages-helper.php:100
+msgid "Your account is awaiting approval. We will email you as soon as it is approved."
+msgstr "החשבון שלך ממתין לאישור. נשלח לך אימייל ברגע שהוא יאושר."
+
+#: src/messages-helper.php:101
+msgid "Your registration was not approved."
+msgstr "ההרשמה שלך לא אושרה."
+
+#: src/messages-helper.php:102
+msgid "Please confirm your email address first, through the link we emailed you."
+msgstr "נא לאמת קודם את כתובת האימייל, דרך הקישור ששלחנו אליך."
+
+#: src/messages-helper.php:105
+#: src/messages-helper.php:161
+msgid "Please fill in all required fields."
+msgstr "נא למלא את כל שדות החובה."
+
+#: src/messages-helper.php:107
+msgid "Please check this field: {field}"
+msgstr "נא לבדוק את השדה: {field}"
+
+#: src/messages-helper.php:108
+msgid "This email address is already registered."
+msgstr "כתובת האימייל הזו כבר רשומה."
+
+#: src/messages-helper.php:109
+msgid "Thank you for registering! We will email you as soon as your account is approved."
+msgstr "תודה שנרשמת! נשלח לך אימייל ברגע שהחשבון יאושר."
+
+#: src/messages-helper.php:110
+msgid "Thank you for registering! We have emailed you a link to set your password."
+msgstr "תודה שנרשמת! שלחנו לך באימייל קישור לבחירת סיסמה."
+
+#: src/messages-helper.php:111
+msgid "Thank you for registering! To complete it, please click the link we emailed you to confirm your email address."
+msgstr "תודה שנרשמת! כדי להשלים את ההרשמה, נא ללחוץ על הקישור ששלחנו אליך באימייל, לאימות הכתובת."
+
+#: src/messages-helper.php:112
+msgid "We could not send the confirmation email. Please try again later."
+msgstr "לא הצלחנו לשלוח את אימייל האימות. נא לנסות שוב מאוחר יותר."
+
+#: src/messages-helper.php:115
+msgid "Please enter your email address."
+msgstr "נא להזין את כתובת האימייל."
+
+#: src/messages-helper.php:116
+msgid "Failed to send the reset email. Please try again later."
+msgstr "שליחת אימייל האיפוס נכשלה. נא לנסות שוב מאוחר יותר."
+
+#: src/messages-helper.php:117
+msgid "If an account matches what you entered, a password reset email is on its way. Please check your inbox."
+msgstr "אם יש חשבון שמתאים למה שהזנת, אימייל לאיפוס הסיסמה בדרך אליך. נא לבדוק את תיבת הדואר."
+
+#: src/messages-helper.php:120
+msgid "Missing required fields."
+msgstr "חסרים שדות חובה."
+
+#: src/messages-helper.php:121
+#: src/messages-helper.php:140
+msgid "The password reset link is invalid or has expired."
+msgstr "הקישור לאיפוס הסיסמה אינו תקין, או שפג תוקפו."
+
+#: src/messages-helper.php:123
+msgid "Password must be at least {min_length} characters long."
+msgstr "הסיסמה צריכה להכיל לפחות {min_length} תווים."
+
+#: src/messages-helper.php:124
+msgid "Password must contain at least one uppercase letter (A-Z)."
+msgstr "הסיסמה צריכה להכיל לפחות אות גדולה אחת באנגלית (A-Z)."
+
+#: src/messages-helper.php:125
+msgid "Password must contain at least one lowercase letter (a-z)."
+msgstr "הסיסמה צריכה להכיל לפחות אות קטנה אחת באנגלית (a-z)."
+
+#: src/messages-helper.php:126
+msgid "Password must contain at least one number (0-9)."
+msgstr "הסיסמה צריכה להכיל לפחות ספרה אחת (0-9)."
+
+#: src/messages-helper.php:127
+msgid "Password must contain at least one special character (such as ! @ # $ %)."
+msgstr "הסיסמה צריכה להכיל לפחות תו מיוחד אחד (כמו ! @ # $ %)."
+
+#: src/messages-helper.php:128
+msgid "Your password has been reset successfully."
+msgstr "הסיסמה אופסה בהצלחה."
+
+#: src/messages-helper.php:132
+msgid "<p>You are already logged in.</p><p>To log out click here: <a style=\"color:#333;\" href=\"{logout_url}\">Logout</a></p>"
+msgstr "<p>כבר התחברת.</p><p>להתנתקות: <a style=\"color:#333;\" href=\"{logout_url}\">התנתקות</a></p>"
+
+#: src/messages-helper.php:135
+msgid "You are already logged in."
+msgstr "כבר התחברת."
+
+#: src/messages-helper.php:136
+msgid "Registration is currently disabled."
+msgstr "ההרשמה סגורה כרגע."
+
+#: src/messages-helper.php:139
+msgid "The password reset link is invalid."
+msgstr "הקישור לאיפוס הסיסמה אינו תקין."
+
+#: src/messages-helper.php:143
+msgid "Thank you, your email address is confirmed. We will email you as soon as your account is approved."
+msgstr "תודה, כתובת האימייל שלך אומתה. נשלח לך אימייל ברגע שהחשבון יאושר."
+
+#: src/messages-helper.php:144
+msgid "Thank you, your email address is confirmed. We have emailed you a link to set your password."
+msgstr "תודה, כתובת האימייל שלך אומתה. שלחנו לך באימייל קישור לבחירת סיסמה."
+
+#: src/messages-helper.php:145
+msgid "Your email address is already confirmed."
+msgstr "כתובת האימייל שלך כבר אומתה."
+
+#: src/messages-helper.php:146
+msgid "This confirmation link is invalid or has expired. To get a new one, register again with the same email address."
+msgstr "קישור האימות אינו תקין, או שפג תוקפו. לקבלת קישור חדש, נא להירשם שוב עם אותה כתובת אימייל."
+
+#: src/messages-helper.php:149
+msgid "Logout"
+msgstr "התנתקות"
+
+#: src/messages-helper.php:150
+msgid "Login"
+msgstr "התחברות"
+
+#: src/messages-helper.php:155
+msgid "This content is for approved users. Please <a href=\"{login_url}\">log in</a> to see it."
+msgstr "התוכן הזה מיועד למשתמשים מאושרים. כדי לראות אותו, נא <a href=\"{login_url}\">להתחבר</a>."
+
+#: src/messages-helper.php:156
+msgid "This content is for approved users only."
+msgstr "התוכן הזה מיועד למשתמשים מאושרים בלבד."
+
+#: src/messages-helper.php:159
+msgid "You must be logged in to view this page."
+msgstr "כדי לראות את העמוד הזה צריך להתחבר."
+
+#: src/messages-helper.php:160
+msgid "Your profile has been updated successfully."
+msgstr "הפרטים שלך עודכנו בהצלחה."
+
+#: src/messages-helper.php:162
+msgid "This email address is already in use by another account."
+msgstr "כתובת האימייל הזו כבר בשימוש בחשבון אחר."
+
+#: src/messages-helper.php:163
+msgid "Your password has been changed successfully."
+msgstr "הסיסמה שונתה בהצלחה."
+
+#: src/messages-helper.php:164
+msgid "The current password you entered is incorrect."
+msgstr "הסיסמה הנוכחית שהזנת שגויה."
+
+#: src/messages-helper.php:165
+msgid "To change your email address, please enter your current password."
+msgstr "כדי לשנות את כתובת האימייל, נא להזין את הסיסמה הנוכחית."
+
+#: src/messages-helper.php:166
+msgid "The new passwords do not match."
+msgstr "הסיסמאות החדשות אינן תואמות."
+
+#: src/messages-helper.php:169
+msgid "Link"
+msgstr "קישור"
+
+#: src/messages-helper.php:170
+msgid "Edit User"
+msgstr "עריכת המשתמש"
+
+#: src/messages-helper.php:171
+msgid "Users awaiting approval"
+msgstr "משתמשים שממתינים לאישור"
+
+#: src/messages-helper.php:172
+msgid "Confirm my email address"
+msgstr "אימות כתובת האימייל שלי"
+
+#: src/messages-helper.php:176
+msgid "Password Reset Request"
+msgstr "בקשה לאיפוס סיסמה"
+
+#: src/messages-helper.php:177
+msgid "Hello {display_name},\n\nWe received a request to reset your password. Please click the link below to reset your password:\n\n{reset_link}\n\nIf you did not request this, you can ignore this email."
+msgstr "שלום {display_name},\n\nקיבלנו בקשה לאיפוס הסיסמה שלך. לאיפוס הסיסמה, נא ללחוץ על הקישור:\n\n{reset_link}\n\nאם לא ביקשת זאת, אפשר להתעלם מהאימייל הזה."
+
+#. translators: %s: the user's name. {display_name} works too.
+#: src/messages-helper.php:181
+msgid "Website: Please confirm your email address"
+msgstr "נא לאמת את כתובת האימייל שלך"
+
+#: src/messages-helper.php:183
+msgid "Hello {display_name},<br><br>To complete your registration, please confirm your email address:<br><br>{confirm_link}<br><br>If you did not register on our website, you can ignore this email."
+msgstr "שלום {display_name},<br><br>כדי להשלים את ההרשמה, נא לאמת את כתובת האימייל שלך:<br><br>{confirm_link}<br><br>אם לא נרשמת לאתר שלנו, אפשר להתעלם מהאימייל הזה."
+
+#. translators: %s: the user's name. {display_name} works too.
+#: src/messages-helper.php:187
+msgid "Website: We received your registration"
+msgstr "קיבלנו את ההרשמה שלך"
+
+#: src/messages-helper.php:189
+msgid "Hello {display_name},<br><br>Thank you for registering. We received your details, and we will email you as soon as your account is approved."
+msgstr "שלום {display_name},<br><br>תודה שנרשמת. קיבלנו את הפרטים שלך, ונשלח לך אימייל ברגע שהחשבון יאושר."
+
+#. translators: %s: the user's name. {display_name} works too.
+#: src/messages-helper.php:193
+#, php-format
+msgid "Website: New registration by %s"
+msgstr "הרשמה חדשה באתר: %s"
+
+#: src/messages-helper.php:197
+msgid "Hello,<br><br>{display_name} has registered on the website.<br><br>{user_details}<br><br>To approve or reject the registration, open the list: {pending_users_link}<br><br>"
+msgstr "שלום,<br><br>הרשמה חדשה באתר: {display_name}.<br><br>{user_details}<br><br>לאישור או לדחייה של ההרשמה, יש לפתוח את הרשימה: {pending_users_link}<br><br>"
+
+#. translators: %s: the user's name. {display_name} works too.
+#: src/messages-helper.php:201
+#, php-format
+msgid "Website: New user %s"
+msgstr "משתמש חדש באתר: %s"
+
+#: src/messages-helper.php:203
+msgid "Hello,<br><br>{display_name} has registered on the website and was approved automatically.<br><br>{user_details}<br><br>To see the user: {edit_user_link}<br><br>"
+msgstr "שלום,<br><br>הרשמה חדשה באתר: {display_name}. ההרשמה אושרה אוטומטית.<br><br>{user_details}<br><br>לצפייה במשתמש: {edit_user_link}<br><br>"
+
+#. translators: %s: the user's name. {display_name} works too.
+#: src/messages-helper.php:207
+#, php-format
+msgid "Website: Account approved for %s"
+msgstr "החשבון אושר: %s"
+
+#: src/messages-helper.php:209
+msgid "Hello,<br><br>{display_name}, your account has been approved!<br><br>To set your password and access your account, click the following link:<br><br>{set_password_link}<br><br>If you have any questions, please contact us.<br><br>Thank you."
+msgstr "שלום {display_name},<br><br>החשבון שלך אושר!<br><br>כדי לבחור סיסמה ולהיכנס לחשבון, נא ללחוץ על הקישור:<br><br>{set_password_link}<br><br>לכל שאלה, אפשר לפנות אלינו.<br><br>תודה."
+
+#. translators: %s: the user's name. {display_name} works too.
+#: src/messages-helper.php:213
+#, php-format
+msgid "Website: Registration not approved for %s"
+msgstr "ההרשמה לא אושרה: %s"
+
+#: src/messages-helper.php:215
+msgid "Hello {display_name},<br><br>Thank you for your interest. We could not approve your registration.<br><br>If you think this is a mistake, please contact us."
+msgstr "שלום {display_name},<br><br>תודה על ההתעניינות. לא יכולנו לאשר את ההרשמה שלך.<br><br>אם נראה לך שזו טעות, אפשר לפנות אלינו."
+
+#: src/register-fields.php:32
+msgid "Customer Type"
+msgstr "סוג לקוח"
+
+#: src/register-fields.php:33
+msgid "Region"
+msgstr "אזור"
+
+#: src/register-fields.php:34
+msgid "Country"
+msgstr "מדינה"
+
+#: src/roles-helper.php:38
+msgid "Pending User"
+msgstr "משתמש ממתין"
+
+#: src/roles-helper.php:39
+msgid "Approved User"
+msgstr "משתמש מאושר"
+
+#: src/roles-helper.php:47
+msgid "Rejected User"
+msgstr "משתמש שנדחה"
+
+#: src/roles-helper.php:59
+msgid "Unconfirmed User"
+msgstr "משתמש לא מאומת"
+
+#: src/user-extra-fields.php:65
+msgid "ID"
+msgstr "מזהה"
+
+#: src/user-extra-fields.php:66
+msgid "Date Registered"
+msgstr "תאריך הרשמה"
+
+#: src/user-extra-fields.php:72
+msgid "Registration Details"
+msgstr "פרטי ההרשמה"

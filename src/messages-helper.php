@@ -10,11 +10,61 @@ defined( 'ABSPATH' ) || exit;
  */
 function clu_get_message( $key ) {
     $options = get_option( 'clu_messages', [] );
-    $message = ( is_array( $options ) && isset( $options[ $key ] ) && $options[ $key ] !== '' )
-        ? $options[ $key ]
+    $saved   = is_array( $options ) && isset( $options[ $key ] ) ? (string) $options[ $key ] : '';
+    $message = clu_is_custom_text( $saved, clu_english_messages()[ $key ] ?? '' )
+        ? $saved
         : ( clu_default_messages()[ $key ] ?? '' );
 
     return str_replace( '{min_length}', (string) (int) clu_get_password_rules()['min_length'], $message );
+}
+
+/**
+ * Tells whether a saved text was written by an admin. Empty, or still the English
+ * default, it was not, and the default in the site's language shows instead. Versions
+ * before 1.7.0 saved every default along with the texts an admin changed.
+ *
+ * @param string $saved
+ * @param string $english The default in English.
+ * @return bool
+ */
+function clu_is_custom_text( $saved, $english ) {
+    return $saved !== '' && $saved !== $english;
+}
+
+/**
+ * Calls a function with the plugin's translations turned off, and returns what it
+ * returns: its texts in English.
+ *
+ * @param callable $callback
+ * @return mixed
+ */
+function clu_untranslated( $callback ) {
+    $original = function ( $translation, $text, $domain ) {
+        return $domain === 'custom-login-users' ? $text : $translation;
+    };
+
+    add_filter( 'gettext', $original, PHP_INT_MAX, 3 );
+
+    try {
+        return $callback();
+    } finally {
+        remove_filter( 'gettext', $original, PHP_INT_MAX );
+    }
+}
+
+/**
+ * Returns the default messages in English.
+ *
+ * @return array
+ */
+function clu_english_messages() {
+    static $english = null;
+
+    if ( $english === null ) {
+        $english = clu_untranslated( 'clu_default_messages' );
+    }
+
+    return $english;
 }
 
 /**
@@ -36,125 +86,133 @@ function clu_default_messages() {
     return [
 
         // ── AJAX: General ────────────────────────────────────────────────
-        'invalid_nonce'              => 'Invalid request.',
-        'general_error'              => 'An error occurred. Please try again later.',
-        'too_many_attempts'          => 'Too many attempts. Please try again later.',
-        'form_processing'            => 'Processing...',
+        'invalid_nonce'              => __( 'Invalid request.', 'custom-login-users' ),
+        'general_error'              => __( 'An error occurred. Please try again later.', 'custom-login-users' ),
+        'too_many_attempts'          => __( 'Too many attempts. Please try again later.', 'custom-login-users' ),
+        'form_processing'            => __( 'Processing...', 'custom-login-users' ),
 
         // ── AJAX: Login ──────────────────────────────────────────────────
-        'login_success'              => 'Login successful!',
-        'login_failed'               => 'The username, email or password is incorrect.',
+        'login_success'              => __( 'Login successful!', 'custom-login-users' ),
+        'login_failed'               => __( 'The username, email or password is incorrect.', 'custom-login-users' ),
         // {minutes} is replaced at runtime with the minutes left.
-        'login_locked'               => 'Too many failed login attempts. Please try again in {minutes} minutes.',
-        'captcha_failed'             => 'Please confirm that you are not a robot, and try again.',
-        'account_pending'            => 'Your account is awaiting approval. We will email you as soon as it is approved.',
-        'account_rejected'           => 'Your registration was not approved.',
-        'account_unconfirmed'        => 'Please confirm your email address first, through the link we emailed you.',
+        'login_locked'               => __( 'Too many failed login attempts. Please try again in {minutes} minutes.', 'custom-login-users' ),
+        'captcha_failed'             => __( 'Please confirm that you are not a robot, and try again.', 'custom-login-users' ),
+        'account_pending'            => __( 'Your account is awaiting approval. We will email you as soon as it is approved.', 'custom-login-users' ),
+        'account_rejected'           => __( 'Your registration was not approved.', 'custom-login-users' ),
+        'account_unconfirmed'        => __( 'Please confirm your email address first, through the link we emailed you.', 'custom-login-users' ),
 
         // ── AJAX: Register ───────────────────────────────────────────────
-        'register_required_fields'   => 'Please fill in all required fields.',
+        'register_required_fields'   => __( 'Please fill in all required fields.', 'custom-login-users' ),
         // {field} is replaced at runtime with the label of the field.
-        'register_invalid_field'     => 'Please check this field: {field}',
-        'email_already_registered'   => 'This email address is already registered.',
-        'register_success'           => 'Thank you for registering! We will email you as soon as your account is approved.',
-        'register_confirm_sent'      => 'Thank you for registering! To complete it, please click the link we emailed you to confirm your email address.',
-        'confirm_email_send_failed'  => 'We could not send the confirmation email. Please try again later.',
+        'register_invalid_field'     => __( 'Please check this field: {field}', 'custom-login-users' ),
+        'email_already_registered'   => __( 'This email address is already registered.', 'custom-login-users' ),
+        'register_success'           => __( 'Thank you for registering! We will email you as soon as your account is approved.', 'custom-login-users' ),
+        'register_success_auto'      => __( 'Thank you for registering! We have emailed you a link to set your password.', 'custom-login-users' ),
+        'register_confirm_sent'      => __( 'Thank you for registering! To complete it, please click the link we emailed you to confirm your email address.', 'custom-login-users' ),
+        'confirm_email_send_failed'  => __( 'We could not send the confirmation email. Please try again later.', 'custom-login-users' ),
 
         // ── AJAX: Password Lost ──────────────────────────────────────────
-        'email_required'             => 'Please enter your email address.',
-        'reset_email_send_failed'    => 'Failed to send the reset email. Please try again later.',
-        'reset_email_sent'           => 'If an account matches what you entered, a password reset email is on its way. Please check your inbox.',
+        'email_required'             => __( 'Please enter your email address.', 'custom-login-users' ),
+        'reset_email_send_failed'    => __( 'Failed to send the reset email. Please try again later.', 'custom-login-users' ),
+        'reset_email_sent'           => __( 'If an account matches what you entered, a password reset email is on its way. Please check your inbox.', 'custom-login-users' ),
 
         // ── AJAX: Password Set ───────────────────────────────────────────
-        'password_set_missing_fields' => 'Missing required fields.',
-        'invalid_reset_link'         => 'The password reset link is invalid or has expired.',
+        'password_set_missing_fields' => __( 'Missing required fields.', 'custom-login-users' ),
+        'invalid_reset_link'         => __( 'The password reset link is invalid or has expired.', 'custom-login-users' ),
         // {min_length} is replaced at runtime with the current rule.
-        'password_min_length'        => 'Password must be at least {min_length} characters long.',
-        'password_uppercase'         => 'Password must contain at least one uppercase letter (A-Z).',
-        'password_lowercase'         => 'Password must contain at least one lowercase letter (a-z).',
-        'password_number'            => 'Password must contain at least one number (0-9).',
-        'password_special_char'      => 'Password must contain at least one special character (such as ! @ # $ %).',
-        'password_reset_success'     => 'Your password has been reset successfully.',
+        'password_min_length'        => __( 'Password must be at least {min_length} characters long.', 'custom-login-users' ),
+        'password_uppercase'         => __( 'Password must contain at least one uppercase letter (A-Z).', 'custom-login-users' ),
+        'password_lowercase'         => __( 'Password must contain at least one lowercase letter (a-z).', 'custom-login-users' ),
+        'password_number'            => __( 'Password must contain at least one number (0-9).', 'custom-login-users' ),
+        'password_special_char'      => __( 'Password must contain at least one special character (such as ! @ # $ %).', 'custom-login-users' ),
+        'password_reset_success'     => __( 'Your password has been reset successfully.', 'custom-login-users' ),
 
         // ── Shortcode: Login form ────────────────────────────────────────
         // {logout_url} is replaced at runtime with wp_logout_url()
-        'already_logged_in'          => '<p>You are already logged in.</p><p>To log out click here: <a style="color:#333;" href="{logout_url}">Logout</a></p>',
+        'already_logged_in'          => __( '<p>You are already logged in.</p><p>To log out click here: <a style="color:#333;" href="{logout_url}">Logout</a></p>', 'custom-login-users' ),
 
         // ── Shortcode: Register form ─────────────────────────────────────
-        'user_logged_in_register'    => 'You are already logged in.',
-        'registration_disabled'      => 'Registration is currently disabled.',
+        'user_logged_in_register'    => __( 'You are already logged in.', 'custom-login-users' ),
+        'registration_disabled'      => __( 'Registration is currently disabled.', 'custom-login-users' ),
 
         // ── Shortcode: Password Set form ─────────────────────────────────
-        'invalid_reset_link_page'    => 'The password reset link is invalid.',
-        'expired_reset_link_page'    => 'The password reset link is invalid or has expired.',
+        'invalid_reset_link_page'    => __( 'The password reset link is invalid.', 'custom-login-users' ),
+        'expired_reset_link_page'    => __( 'The password reset link is invalid or has expired.', 'custom-login-users' ),
 
         // ── Shortcode: Register or Login page, after the link that confirms an email ──
-        'email_confirmed'            => 'Thank you, your email address is confirmed. We will email you as soon as your account is approved.',
-        'email_already_confirmed'    => 'Your email address is already confirmed.',
-        'email_confirm_invalid'      => 'This confirmation link is invalid or has expired. To get a new one, register again with the same email address.',
+        'email_confirmed'            => __( 'Thank you, your email address is confirmed. We will email you as soon as your account is approved.', 'custom-login-users' ),
+        'email_confirmed_auto'       => __( 'Thank you, your email address is confirmed. We have emailed you a link to set your password.', 'custom-login-users' ),
+        'email_already_confirmed'    => __( 'Your email address is already confirmed.', 'custom-login-users' ),
+        'email_confirm_invalid'      => __( 'This confirmation link is invalid or has expired. To get a new one, register again with the same email address.', 'custom-login-users' ),
 
         // ── Shortcode: Auth Buttons ──────────────────────────────────────
-        'logout_button_text'         => 'Logout',
-        'login_button_text'          => 'Login',
-        'register_button_text'       => 'Register',
+        'logout_button_text'         => __( 'Logout', 'custom-login-users' ),
+        'login_button_text'          => __( 'Login', 'custom-login-users' ),
+        'register_button_text'       => __( 'Register', 'custom-login-users' ),
 
         // ── Restricted content ───────────────────────────────────────────
         // {login_url} = login page that leads back here, {register_url} = register page
-        'content_login_required'     => 'This content is for approved users. Please <a href="{login_url}">log in</a> to see it.',
-        'content_no_access'          => 'This content is for approved users only.',
+        'content_login_required'     => __( 'This content is for approved users. Please <a href="{login_url}">log in</a> to see it.', 'custom-login-users' ),
+        'content_no_access'          => __( 'This content is for approved users only.', 'custom-login-users' ),
 
         // ── Shortcode: My Account ────────────────────────────────────────
-        'my_account_not_logged_in'      => 'You must be logged in to view this page.',
-        'profile_update_success'        => 'Your profile has been updated successfully.',
-        'profile_update_missing_fields' => 'Please fill in all required fields.',
-        'profile_email_taken'           => 'This email address is already in use by another account.',
-        'password_update_success'       => 'Your password has been changed successfully.',
-        'password_current_incorrect'    => 'The current password you entered is incorrect.',
-        'email_change_password_required' => 'To change your email address, please enter your current password.',
-        'password_confirm_mismatch'     => 'The new passwords do not match.',
+        'my_account_not_logged_in'      => __( 'You must be logged in to view this page.', 'custom-login-users' ),
+        'profile_update_success'        => __( 'Your profile has been updated successfully.', 'custom-login-users' ),
+        'profile_update_missing_fields' => __( 'Please fill in all required fields.', 'custom-login-users' ),
+        'profile_email_taken'           => __( 'This email address is already in use by another account.', 'custom-login-users' ),
+        'password_update_success'       => __( 'Your password has been changed successfully.', 'custom-login-users' ),
+        'password_current_incorrect'    => __( 'The current password you entered is incorrect.', 'custom-login-users' ),
+        'email_change_password_required' => __( 'To change your email address, please enter your current password.', 'custom-login-users' ),
+        'password_confirm_mismatch'     => __( 'The new passwords do not match.', 'custom-login-users' ),
 
         // ── Email: shared ────────────────────────────────────────────────
-        'email_link_text'            => 'Link',
-        'email_edit_user_text'       => 'Edit User',
-        'email_pending_list_text'    => 'Users awaiting approval',
-        'email_confirm_link_text'    => 'Confirm my email address',
+        'email_link_text'            => __( 'Link', 'custom-login-users' ),
+        'email_edit_user_text'       => __( 'Edit User', 'custom-login-users' ),
+        'email_pending_list_text'    => __( 'Users awaiting approval', 'custom-login-users' ),
+        'email_confirm_link_text'    => __( 'Confirm my email address', 'custom-login-users' ),
 
         // ── Email: Password Lost (sent to user) ──────────────────────────
         // {display_name} = display name, {reset_url} = reset URL, {reset_link} = linked text
-        'reset_email_subject'        => 'Password Reset Request',
-        'reset_email_body'           => "Hello {display_name},\n\nWe received a request to reset your password. Please click the link below to reset your password:\n\n{reset_link}\n\nIf you did not request this, you can ignore this email.",
+        'reset_email_subject'        => __( 'Password Reset Request', 'custom-login-users' ),
+        'reset_email_body'           => __( "Hello {display_name},\n\nWe received a request to reset your password. Please click the link below to reset your password:\n\n{reset_link}\n\nIf you did not request this, you can ignore this email.", 'custom-login-users' ),
 
         // ── Email: Confirm the email address (sent to user) ──────────────
-        // %s or {display_name} = display name
-        'confirm_email_subject'      => 'Website: Please confirm your email address',
+        /* translators: %s: the user's name. {display_name} works too. */
+        'confirm_email_subject'      => __( 'Website: Please confirm your email address', 'custom-login-users' ),
         // {display_name} = display name, {confirm_url} = confirmation URL, {confirm_link} = linked text
-        'confirm_email_body'         => "Hello {display_name},<br><br>To complete your registration, please confirm your email address:<br><br>{confirm_link}<br><br>If you did not register on our website, you can ignore this email.",
+        'confirm_email_body'         => __( "Hello {display_name},<br><br>To complete your registration, please confirm your email address:<br><br>{confirm_link}<br><br>If you did not register on our website, you can ignore this email.", 'custom-login-users' ),
 
         // ── Email: Registration received (sent to user) ──────────────────
-        // %s or {display_name} = display name
-        'notify_received_subject'    => 'Website: We received your registration',
+        /* translators: %s: the user's name. {display_name} works too. */
+        'notify_received_subject'    => __( 'Website: We received your registration', 'custom-login-users' ),
         // {display_name} = display name
-        'notify_received_body'       => "Hello {display_name},<br><br>Thank you for registering. We received your details, and we will email you as soon as your account is approved.",
+        'notify_received_body'       => __( "Hello {display_name},<br><br>Thank you for registering. We received your details, and we will email you as soon as your account is approved.", 'custom-login-users' ),
 
         // ── Email: New Registration (sent to admin) ──────────────────────
-        // %s or {display_name} = display name
-        'notify_client_subject'      => 'Website: New registration by %s',
+        /* translators: %s: the user's name. {display_name} works too. */
+        'notify_client_subject'      => __( 'Website: New registration by %s', 'custom-login-users' ),
         // {display_name} = display name, {user_details} = what the user filled in,
         // {pending_users_url} and {pending_users_link} = the list of users awaiting approval,
         // {edit_user_url} = edit URL, {edit_user_link} = linked text
-        'notify_client_body'         => "Hello,<br><br>{display_name} has registered on the website.<br><br>{user_details}<br><br>To approve or reject the registration, open the list: {pending_users_link}<br><br>",
+        'notify_client_body'         => __( "Hello,<br><br>{display_name} has registered on the website.<br><br>{user_details}<br><br>To approve or reject the registration, open the list: {pending_users_link}<br><br>", 'custom-login-users' ),
+
+        // ── Email: New user approved automatically (sent to admin) ───────
+        /* translators: %s: the user's name. {display_name} works too. */
+        'notify_auto_subject'        => __( 'Website: New user %s', 'custom-login-users' ),
+        // The same placeholders as the email about a new registration.
+        'notify_auto_body'           => __( "Hello,<br><br>{display_name} has registered on the website and was approved automatically.<br><br>{user_details}<br><br>To see the user: {edit_user_link}<br><br>", 'custom-login-users' ),
 
         // ── Email: Account Approved (sent to user) ───────────────────────
-        // %s or {display_name} = display name
-        'notify_user_subject'        => 'Website: Account approved for %s',
+        /* translators: %s: the user's name. {display_name} works too. */
+        'notify_user_subject'        => __( 'Website: Account approved for %s', 'custom-login-users' ),
         // {display_name} = display name, {set_password_url} = reset URL, {set_password_link} = linked text
-        'notify_user_body'           => "Hello,<br><br>{display_name}, your account has been approved!<br><br>To set your password and access your account, click the following link:<br><br>{set_password_link}<br><br>If you have any questions, please contact us.<br><br>Thank you.",
+        'notify_user_body'           => __( "Hello,<br><br>{display_name}, your account has been approved!<br><br>To set your password and access your account, click the following link:<br><br>{set_password_link}<br><br>If you have any questions, please contact us.<br><br>Thank you.", 'custom-login-users' ),
 
         // ── Email: Registration Rejected (sent to user) ──────────────────
-        // %s or {display_name} = display name
-        'notify_rejected_subject'    => 'Website: Registration not approved for %s',
+        /* translators: %s: the user's name. {display_name} works too. */
+        'notify_rejected_subject'    => __( 'Website: Registration not approved for %s', 'custom-login-users' ),
         // {display_name} = display name
-        'notify_rejected_body'       => "Hello {display_name},<br><br>Thank you for your interest. We could not approve your registration.<br><br>If you think this is a mistake, please contact us.",
+        'notify_rejected_body'       => __( "Hello {display_name},<br><br>Thank you for your interest. We could not approve your registration.<br><br>If you think this is a mistake, please contact us.", 'custom-login-users' ),
     ];
 }
 

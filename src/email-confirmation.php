@@ -73,22 +73,23 @@ function clu_send_confirmation_email( $user ) {
         clu_get_page_url( 'url_page_register', home_url( '/' ) )
     );
 
-    $mail_host = clu_get_mail_host();
-    $headers   = clu_get_mail_headers( $mail_host ? 'info@' . $mail_host : '', get_bloginfo( 'name' ) );
-    $name      = esc_html( $user->display_name );
+    return clu_send_mail( $user->user_email, function () use ( $user, $url ) {
+        $name = esc_html( $user->display_name );
 
-    $message = clu_format_message_template(
-        clu_get_message( 'confirm_email_body' ),
-        [
-            '%1$s'           => $name,
-            '%2$s'           => $url,
-            '{display_name}' => $name,
-            '{confirm_url}'  => $url,
-            '{confirm_link}' => clu_message_link( $url, clu_get_message( 'email_confirm_link_text' ) ),
-        ]
-    );
-
-    return (bool) wp_mail( $user->user_email, clu_format_subject( 'confirm_email_subject', $user->display_name ), $message, $headers );
+        return [
+            clu_format_subject( 'confirm_email_subject', $user->display_name ),
+            clu_format_message_template(
+                clu_get_message( 'confirm_email_body' ),
+                [
+                    '%1$s'           => $name,
+                    '%2$s'           => $url,
+                    '{display_name}' => $name,
+                    '{confirm_url}'  => $url,
+                    '{confirm_link}' => clu_message_link( $url, clu_get_message( 'email_confirm_link_text' ) ),
+                ]
+            ),
+        ];
+    }, $user );
 }
 
 /**
@@ -171,7 +172,7 @@ function clu_handle_email_confirmation_link() {
 function clu_email_confirmation_notice( $result = null ) {
     $result   = $result === null ? clu_query_text( 'clu_email_confirmed' ) : $result;
     $messages = [
-        'confirmed' => 'email_confirmed',
+        'confirmed' => clu_auto_approve_is_on() ? 'email_confirmed_auto' : 'email_confirmed',
         'already'   => 'email_already_confirmed',
         'invalid'   => 'email_confirm_invalid',
     ];
