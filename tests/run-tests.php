@@ -2439,6 +2439,68 @@ section( '27. Nonces, templates, settings, update and uninstall' );
     t( 'Setup Pages flags an existing page without a form', ( $by_slug['set-password']['status'] ?? '' ) === 'no_shortcode', print_r( $by_slug['set-password'] ?? null, true ) );
     t( 'Setup Pages accepts an existing page with the older shortcode', ( $by_slug['password-lost']['status'] ?? '' ) === 'exists', print_r( $by_slug['password-lost'] ?? null, true ) );
     t( 'Setup Pages saves the URLs', strpos( clu_get_page_url( 'url_page_login' ), '/login' ) !== false, clu_get_page_url( 'url_page_login' ) );
+
+    // What the new pages start with.
+    $login_page   = get_page_by_path( 'login' );
+    $account_page = get_page_by_path( 'my-account' );
+    $out_page     = get_page_by_path( 'logged-out' );
+    $updated_page = get_page_by_path( 'password-updated' );
+    t( 'a page with a form holds its shortcode only', $login_page && $login_page->post_content === "<!-- wp:shortcode -->\n[clu_login_form]\n<!-- /wp:shortcode -->", $login_page->post_content ?? '' );
+    t( 'the Logged Out page starts with a text and a link to the new login page', $out_page && strpos( $out_page->post_content, 'You have logged out.' ) !== false && strpos( $out_page->post_content, 'href="' . esc_url( get_permalink( $login_page ) ) . '">Log in again</a>' ) !== false, $out_page->post_content ?? '' );
+    t( 'the Password Updated page starts with a text and a link to the new account page', $updated_page && strpos( $updated_page->post_content, 'Your new password has been saved.' ) !== false && strpos( $updated_page->post_content, 'href="' . esc_url( get_permalink( $account_page ) ) . '">Go to my account</a>' ) !== false, $updated_page->post_content ?? '' );
+    t( 'their titles say the same', $out_page && $out_page->post_title === 'Logged Out' && $updated_page && $updated_page->post_title === 'Password Updated' );
+    $shown = $out_page ? apply_filters( 'the_content', $out_page->post_content ) : '';
+    t( 'the text shows on the page as a paragraph', (bool) preg_match( '#<p( [^>]*)?>You have logged out\.</p>#', $shown ), substr( $shown, 0, 300 ) );
+    t( 'an existing page keeps its content', get_page_by_path( 'set-password' )->post_content === 'No form here' );
+    $alone = clu_setup_page_content( [ 'text' => 'logged_out' ], [] );
+    t( 'with no login page, Logged Out links to the site\'s login address', strpos( $alone, 'href="' . esc_url( wp_login_url() ) . '"' ) !== false, $alone );
+    $alone = clu_setup_page_content( [ 'text' => 'password_updated' ], [] );
+    t( 'with no account page, Password Updated links to the home page', strpos( $alone, 'href="' . esc_url( home_url( '/' ) ) . '">Go to the home page</a>' ) !== false, $alone );
+
+    if ( ! empty( $hebrew_ok ) ) {
+        $moved      = 0;
+        $move_aside = function () use ( $wpdb, &$moved ) {
+            $moved++;
+            foreach ( [ 'login', 'register', 'my-account', 'logged-out', 'password-updated' ] as $slug ) {
+                $existing = get_page_by_path( $slug );
+                if ( $existing ) {
+                    $wpdb->update( $wpdb->posts, [ 'post_name' => $slug . '-moved-by-test-' . $moved ], [ 'ID' => $existing->ID ] );
+                    clean_post_cache( $existing->ID );
+                }
+            }
+            wp_cache_flush();
+        };
+
+        // A site in Hebrew.
+        $move_aside();
+        switch_to_locale( 'he_IL' );
+        clu_create_setup_pages();
+        restore_previous_locale();
+        $out_page = get_page_by_path( 'logged-out' );
+        t( 'on a site in Hebrew the new pages get Hebrew titles', get_page_by_path( 'login' )->post_title === 'התחברות' && $out_page && $out_page->post_title === 'התנתקות' && get_page_by_path( 'password-updated' )->post_title === 'הסיסמה עודכנה' );
+        t( 'and Hebrew texts', $out_page && strpos( $out_page->post_content, '<p>התנתקת מהחשבון.</p>' ) !== false && strpos( $out_page->post_content, '>להתחברות מחדש</a>' ) !== false && strpos( get_page_by_path( 'password-updated' )->post_content, '>לחשבון שלי</a>' ) !== false, $out_page->post_content ?? '' );
+        t( 'at the same English addresses', $out_page && $out_page->post_name === 'logged-out' );
+
+        // An admin who works in Hebrew on a site in English, as the button's request runs:
+        // admin-ajax.php counts as wp-admin, where WordPress uses the admin's own language.
+        $move_aside();
+        require_once ABSPATH . 'wp-admin/includes/class-wp-screen.php';
+        require_once ABSPATH . 'wp-admin/includes/screen.php';
+        $locale_was = get_user_meta( CLU_TEST_ADMIN, 'locale', true );
+        update_user_meta( CLU_TEST_ADMIN, 'locale', 'he_IL' );
+        wp_set_current_user( CLU_TEST_ADMIN );
+        $GLOBALS['current_screen'] = WP_Screen::get( 'settings_page_clu-settings' );
+        unload_textdomain( 'custom-login-users', true );
+        $admin_sees = _x( 'Logged Out', 'page title', 'custom-login-users' );
+        clu_create_setup_pages();
+        unset( $GLOBALS['current_screen'] );
+        unload_textdomain( 'custom-login-users', true );
+        $locale_was !== '' ? update_user_meta( CLU_TEST_ADMIN, 'locale', $locale_was ) : delete_user_meta( CLU_TEST_ADMIN, 'locale' );
+        $out_page = get_page_by_path( 'logged-out' );
+        t( 'an admin who works in Hebrew sees the plugin in Hebrew', $admin_sees === 'התנתקות', $admin_sees );
+        t( 'yet the new pages come in the site\'s language', $out_page && $out_page->post_title === 'Logged Out' && strpos( $out_page->post_content, 'You have logged out.' ) !== false, ( $out_page->post_title ?? '' ) . ' / ' . ( $out_page->post_content ?? '' ) );
+        t( 'and the tests are back in English', get_locale() === 'en_US' && _x( 'Logged Out', 'page title', 'custom-login-users' ) === 'Logged Out' );
+    }
     wp_set_current_user( 0 );
 
     $marker_page = make_page( 'Uninstall marker', 'x', true );

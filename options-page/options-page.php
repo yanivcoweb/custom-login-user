@@ -793,6 +793,7 @@ function clu_render_setup_pages_tab() {
     <h2>Auto-Create Plugin Pages</h2>
     <p>Click the button below to automatically create all required pages and populate the <strong>Pages URL</strong> tab with their addresses.</p>
     <p>If a page with the same slug already exists it will be kept as-is and its URL will be saved to the settings.</p>
+    <p>New pages get their titles in the site's language. The two pages without a form start with a short text in that language and a link onwards, which you can edit like any page.</p>
 
     <table class="widefat striped clu-setup-table">
         <thead>
@@ -810,7 +811,7 @@ function clu_render_setup_pages_tab() {
             <tr data-slug="<?php echo esc_attr( $page['slug'] ); ?>">
                 <td><?php echo esc_html( $page['title'] ); ?></td>
                 <td><code>/<?php echo esc_html( $page['slug'] ); ?>/</code></td>
-                <td><?php echo ! empty( $page['shortcode'] ) ? '<code>[' . esc_html( $page['shortcode'] ) . ']</code>' : '&mdash;'; ?></td>
+                <td><?php echo ! empty( $page['shortcode'] ) ? '<code>[' . esc_html( $page['shortcode'] ) . ']</code>' : 'None &mdash; a short text'; ?></td>
                 <td class="clu-page-status">
                     <?php if ( ! $existing ) : ?>
                         <span class="clu-status clu-status--missing">&mdash; Not created yet</span>

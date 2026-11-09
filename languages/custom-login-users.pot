@@ -2,14 +2,14 @@
 # This file is distributed under the same license as the Custom Login Users plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: Custom Login Users 1.7.1\n"
+"Project-Id-Version: Custom Login Users 1.8.0\n"
 "Report-Msgid-Bugs-To: https://github.com/yanivcoweb/custom-login-user/issues\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-08T12:07:54+00:00\n"
+"POT-Creation-Date: 2026-11-09T21:37:12+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: custom-login-users\n"
@@ -37,6 +37,61 @@ msgstr ""
 #. Author URI of the plugin
 #: custom-login-users.php
 msgid "https://yanivsasson.co.il/"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:16
+msgctxt "page title"
+msgid "Login"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:23
+msgctxt "page title"
+msgid "Register"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:30
+msgctxt "page title"
+msgid "Set Password"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:37
+msgctxt "page title"
+msgid "Password Lost"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:44
+msgctxt "page title"
+msgid "My Account"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:51
+msgctxt "page title"
+msgid "Logged Out"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:57
+msgctxt "page title"
+msgid "Password Updated"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:109
+msgid "You have logged out."
+msgstr ""
+
+#: ajax/ajax-create-pages.php:110
+msgid "Log in again"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:117
+msgid "Your new password has been saved."
+msgstr ""
+
+#: ajax/ajax-create-pages.php:119
+msgid "Go to my account"
+msgstr ""
+
+#: ajax/ajax-create-pages.php:120
+msgid "Go to the home page"
 msgstr ""
 
 #: forms/user_extra_fields.php:11

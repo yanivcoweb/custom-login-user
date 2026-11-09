@@ -181,6 +181,7 @@ The default texts of the forms, the messages and the emails follow the site's la
 - A text you wrote in the settings stays as you wrote it. A text left at its default, including one an older version saved as it was, shows in the site's language. Texts are compared by their words, so a default that version 1.0 saved with other line breaks counts as a default too
 - Emails go in the language of whoever gets them: the user's own language if they chose one in their profile, or the site's. In a right-to-left language the email is right to left too
 - The settings screen itself stays in English
+- Pages made by **Create Pages & Save URLs** get their titles and texts in the site's language, even when the admin who clicks works in another one. Their addresses stay in English, such as `/login/`
 - On a site with WPML, WPML decides the language of each request, emails included
 - The country and region lists, and the choices of Customer Type, stay in English
 
@@ -216,7 +217,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 1. Upload the plugin folder to `/wp-content/plugins/`.
 2. Activate the plugin from the **Plugins** menu in WordPress.
 3. Go to **Settings > Custom Login Users**.
-4. On the **Setup Pages** tab, click **Create Pages & Save URLs**, or create the pages yourself with the shortcodes above and fill in the **Pages URL** tab.
+4. On the **Setup Pages** tab, click **Create Pages & Save URLs**, or create the pages yourself with the shortcodes above and fill in the **Pages URL** tab. The button makes seven pages: five with a form, and two without one that open after logging out and after choosing a password. Those two start with a short text and a link onwards (to the login page, and to My Account or the home page), which you can edit like any page. A page that already exists at the same address is kept as it is.
 5. Turn on **Anyone can register** in **Settings > General** if the site takes registrations.
 
 ---
@@ -280,6 +281,15 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.8.0
+
+Added
+
+- **Create Pages & Save URLs** no longer leaves the Logged Out and Password Updated pages empty. Each starts with a line that says what happened and a link onwards: Logged Out to the login page, Password Updated to My Account, or to the home page when there is no My Account page. The text is ordinary page content, to edit or replace.
+- The pages it creates get their titles and texts in the site's language, with Hebrew included, and not in the language of the admin who clicks. Addresses stay in English. The Setup Pages table shows the titles the pages will get.
+
+Pages that already exist are not changed, so a site that created its pages with an earlier version keeps them as they are.
 
 ### 1.7.1
 

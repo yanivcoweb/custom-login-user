@@ -552,3 +552,58 @@ msgstr "תאריך הרשמה"
 #: src/user-extra-fields.php:72
 msgid "Registration Details"
 msgstr "פרטי ההרשמה"
+
+#: ajax/ajax-create-pages.php:16
+msgctxt "page title"
+msgid "Login"
+msgstr "התחברות"
+
+#: ajax/ajax-create-pages.php:23
+msgctxt "page title"
+msgid "Register"
+msgstr "הרשמה"
+
+#: ajax/ajax-create-pages.php:30
+msgctxt "page title"
+msgid "Set Password"
+msgstr "בחירת סיסמה"
+
+#: ajax/ajax-create-pages.php:37
+msgctxt "page title"
+msgid "Password Lost"
+msgstr "שחזור סיסמה"
+
+#: ajax/ajax-create-pages.php:44
+msgctxt "page title"
+msgid "My Account"
+msgstr "החשבון שלי"
+
+#: ajax/ajax-create-pages.php:51
+msgctxt "page title"
+msgid "Logged Out"
+msgstr "התנתקות"
+
+#: ajax/ajax-create-pages.php:57
+msgctxt "page title"
+msgid "Password Updated"
+msgstr "הסיסמה עודכנה"
+
+#: ajax/ajax-create-pages.php:109
+msgid "You have logged out."
+msgstr "התנתקת מהחשבון."
+
+#: ajax/ajax-create-pages.php:110
+msgid "Log in again"
+msgstr "להתחברות מחדש"
+
+#: ajax/ajax-create-pages.php:117
+msgid "Your new password has been saved."
+msgstr "הסיסמה החדשה נשמרה."
+
+#: ajax/ajax-create-pages.php:119
+msgid "Go to my account"
+msgstr "לחשבון שלי"
+
+#: ajax/ajax-create-pages.php:120
+msgid "Go to the home page"
+msgstr "לדף הבית"
