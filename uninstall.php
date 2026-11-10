@@ -25,6 +25,7 @@ $clu_options = [
     'clu_password_rules',
     'clu_messages',
     'clu_roles',
+    'clu_user_status',
 ];
 
 foreach ( $clu_options as $clu_option ) {
@@ -33,7 +34,8 @@ foreach ( $clu_options as $clu_option ) {
 
 delete_transient( 'clu_pending_count' );
 delete_transient( 'clu_captcha_problem' );
-foreach ( [ 'clu_approval_link', 'clu_email_confirm', 'clu_email_confirmed' ] as $clu_meta ) {
+delete_transient( 'clu_status_pending_count' );
+foreach ( [ 'clu_approval_link', 'clu_email_confirm', 'clu_email_confirmed', 'clu_status', 'clu_status_changed_at', 'clu_status_changed_by' ] as $clu_meta ) {
     delete_metadata( 'user', 0, $clu_meta, '', true );
 }
 delete_post_meta_by_key( '_clu_restricted' );

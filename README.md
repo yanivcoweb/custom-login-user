@@ -141,9 +141,25 @@ Before turning this on, know that:
 
 ---
 
+## User Status
+
+For a site where some users are a kind of their own that an admin approves, such as business customers or members, while everyone keeps the role they have. Off by default: tick **Use a status** on the **User Status** tab, and give that kind of user a name, which becomes the title of the status on the admin screens.
+
+- A user's status is None, Pending, Approved or Rejected. It is kept on the user, and **never changes their role**
+- An admin sets it on the user's screen, or on the Users list: a column, links under the name, bulk actions, and a link above the list to the pending ones. Whoever may change a user's role may change their status
+- A user with the Approved status sees [restricted content](#restricted-content)
+- A status does not stop anyone from logging in, and the plugin sends no email about it. Other code can act on it, as below
+- With the setting off nobody has a status and nothing of it shows. What was saved stays, and counts again when the setting is turned back on
+
+It is apart from the [approval of new registrations](#user-approval-workflow), which works through roles and is the same with the status on or off. A site can use either, or both.
+
+For code: `clu_status_is_on()`, `clu_status_label()`, `clu_get_user_status( $user_id )`, `clu_user_status_is_approved( $user_id )` and `clu_set_user_status( $user_id, $status )`, with the status `pending`, `approved`, `rejected` or `''`. The action `clu_user_status_changed` fires after a change with the user ID, the new status and the old one.
+
+---
+
 ## Restricted Content
 
-Approved users, site administrators and whoever can edit the page can see restricted content.
+Approved users, site administrators and whoever can edit the page can see restricted content. Approved means the approved role, or the Approved [status](#user-status) on a site that uses it.
 
 **A whole page or post:** tick **Approved users only** in the **Access** box on its edit screen. The lists in wp-admin mark it next to the title.
 
@@ -231,6 +247,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 - **Register, Login, Password Reset, Password Lost and My Account Form** — Labels, buttons and validation texts
 - **Password Rules** — Requirements for new passwords
 - **Messages** — Texts shown to users, and the email templates
+- **User Status** — Whether some users have a status of their own next to their role, and the name of that kind of user
 - **User Roles** — Which roles count as pending and approved. Roles that can manage the site are not allowed here, since the pending role goes to anyone who fills in the public form
 - **Setup Pages** — Creates the pages
 
@@ -255,7 +272,7 @@ Custom fields can be text, long text, phone, number, web address, dropdown or ch
 | `clu_user_can_view_restricted` | Decide who sees restricted content, for example to let in a role that was on the site before the approval flow. Receives the answer, the user and the post ID, which is 0 for restricted content in general |
 | `clu_restrictable_post_types` | The post types that offer the Access box |
 
-The action `clu_decision_mail_failed` fires when an approval or rejection email could not be sent.
+The action `clu_decision_mail_failed` fires when an approval or rejection email could not be sent. The action `clu_user_status_changed` fires after a user's [status](#user-status) changed, with the user ID, the new status and the old one.
 
 ---
 
@@ -281,6 +298,14 @@ php tests/run-tests.php /path/to/wp-load.php --bare
 ---
 
 ## Changelog
+
+### 1.9.0
+
+Added
+
+- **User Status**: a status kept on the user, next to their role and without changing it, for a kind of user that an admin approves, such as business customers. It is turned on with a checkbox on the new **User Status** tab, where that kind of user also gets its name. The status is set on the user's screen and on the Users list, the Approved status opens restricted content, and `clu_user_status_changed` tells other code about a change. It does not stop a login and sends no email. See [User Status](#user-status).
+
+Off by default, so nothing changes on a site that does not turn it on. The approval of new registrations through roles is as it was.
 
 ### 1.8.0
 

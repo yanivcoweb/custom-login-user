@@ -5,8 +5,8 @@ defined( 'ABSPATH' ) || exit;
 /* ─── Who sees what ──────────────────────────────────────────────────── */
 
 /**
- * Tells whether the current user may see restricted content: an approved user, a site
- * administrator, or someone who can edit this very post.
+ * Tells whether the current user may see restricted content: an approved user, by role
+ * or by status, a site administrator, or someone who can edit this very post.
  *
  * @param int $post_id 0 for restricted content in general.
  * @return bool
@@ -15,6 +15,7 @@ function clu_user_can_view_restricted( $post_id = 0 ) {
     $user    = wp_get_current_user();
     $allowed = $user->exists() && (
         in_array( clu_get_role_slug( 'approved_role' ), (array) $user->roles, true )
+        || clu_user_status_is_approved( $user->ID )
         || user_can( $user, 'manage_options' )
         || ( $post_id && user_can( $user, 'edit_post', $post_id ) )
     );

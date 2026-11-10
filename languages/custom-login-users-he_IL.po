@@ -607,3 +607,67 @@ msgstr "לחשבון שלי"
 #: ajax/ajax-create-pages.php:120
 msgid "Go to the home page"
 msgstr "לדף הבית"
+
+#: src/user-status.php
+msgid "Status"
+msgstr "סטטוס"
+
+#: src/user-status.php
+msgid "None"
+msgstr "ללא"
+
+#: src/user-status.php
+msgid "Pending"
+msgstr "ממתין"
+
+#: src/user-status.php
+msgid "Approved"
+msgstr "מאושר"
+
+#: src/user-status.php
+msgid "Rejected"
+msgstr "נדחה"
+
+#. translators: %s: the name of the kind of user, such as Business customer.
+#: src/user-status.php
+#, php-format
+msgid "%s: approve"
+msgstr "%s: אישור"
+
+#. translators: %s: the name of the kind of user, such as Business customer.
+#: src/user-status.php
+#, php-format
+msgid "%s: reject"
+msgstr "%s: דחייה"
+
+#. translators: %s: the name of the kind of user, such as Business customer.
+#: src/user-status.php
+#, php-format
+msgid "%s: remove"
+msgstr "%s: הסרה"
+
+#. translators: %s: the name of the kind of user, such as Business customer.
+#: src/user-status.php
+#, php-format
+msgid "%s: pending"
+msgstr "%s: ממתינים"
+
+#. translators: %d: number of users.
+#: src/user-status.php
+#, php-format
+msgid "The status of %d user was updated."
+msgid_plural "The status of %d users was updated."
+msgstr[0] "הסטטוס של משתמש אחד עודכן."
+msgstr[1] "הסטטוס של %d משתמשים עודכן."
+
+#. translators: %d: number of users.
+#: src/user-status.php
+#, php-format
+msgid "%d user was skipped: already in that status, or you may not change it."
+msgid_plural "%d users were skipped: already in that status, or you may not change it."
+msgstr[0] "משתמש אחד לא עודכן: הוא כבר בסטטוס הזה, או שאין לך הרשאה לשנות אותו."
+msgstr[1] "%d משתמשים לא עודכנו: הם כבר בסטטוס הזה, או שאין לך הרשאה לשנות אותו."
+
+#: src/user-status.php
+msgid "Changing it does not change the role of the user."
+msgstr "שינוי הסטטוס לא משנה את התפקיד של המשתמש."

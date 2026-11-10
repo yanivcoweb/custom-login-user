@@ -240,10 +240,11 @@ function approved_role() { return clu_get_role_slug( 'approved_role' ); }
 function reset_state() {
     wp_set_current_user( 0 );
     $GLOBALS['clu_mails'] = [];
-    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_login_form', 'clu_pending_count', 'clu_replace_wp_login', 'clu_security', 'clu_auto_approve' ] as $o ) {
+    foreach ( [ 'clu_mail', 'clu_messages', 'clu_password_rules', 'clu_pages_url', 'clu_roles', 'clu_register_fields', 'clu_register_form', 'clu_login_form', 'clu_pending_count', 'clu_replace_wp_login', 'clu_security', 'clu_auto_approve', 'clu_user_status' ] as $o ) {
         delete_option( $o );
     }
     delete_transient( 'clu_pending_count' );
+    delete_transient( 'clu_status_pending_count' );
     clu_keep_legacy_register_fields();
     update_option( 'users_can_register', 1 );
     global $wpdb;
@@ -2328,7 +2329,170 @@ section( '26. Per site: templates, automatic approval, languages' );
 }
 
 reset_state();
-section( '27. Nonces, templates, settings, update and uninstall' );
+section( '27. A status on the user, next to the role' );
+{
+    /** Runs the status handler of the users screen the way a click does. Returns where it redirected to, or 'died'. */
+    $status_click = function ( $action, $user_ids, $nonce = null, $as = CLU_TEST_ADMIN ) {
+        wp_set_current_user( $as );
+        $_REQUEST = [ 'action' => $action, 'users' => (array) $user_ids, '_wpnonce' => $nonce === null ? wp_create_nonce( 'bulk-users' ) : $nonce ];
+        $_GET     = $_REQUEST;
+        $target   = 'nothing';
+        $catch    = function ( $location ) use ( &$target ) {
+            $target = $location;
+            throw new CLU_Die();
+        };
+        add_filter( 'wp_redirect', $catch );
+        try {
+            clu_handle_status_actions();
+        } catch ( CLU_Die $e ) {
+            if ( $target === 'nothing' ) {
+                $target = 'died';
+            }
+        }
+        remove_filter( 'wp_redirect', $catch );
+        $_REQUEST = $_GET = [];
+        wp_set_current_user( 0 );
+        return $target;
+    };
+
+    $s1    = make_user( 'clu_s1', 'clu-s1@example.test', 'Start1!pass', 'subscriber' );
+    $s2    = make_user( 'clu_s2', 'clu-s2@example.test', 'Start1!pass', 'subscriber' );
+    $spage = make_page( 'Status only', 'For the approved.' );
+
+    // Off, as on every site that never turned it on.
+    t( 'off by default', ! clu_status_is_on() );
+    update_user_meta( $s1, 'clu_status', 'approved' );
+    t( 'while off nobody has a status, whatever is saved', clu_get_user_status( $s1 ) === '' && ! clu_user_status_is_approved( $s1 ) );
+    t( 'while off a status cannot be set', clu_set_user_status( $s2, 'approved' ) === false && get_user_meta( $s2, 'clu_status', true ) === '' );
+    t( 'while off it opens no restricted content', visit( $spage, $s1 ) !== 'open' );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    t( 'while off the users list has no column, links or bulk actions', ! isset( apply_filters( 'manage_users_columns', [] )['clu_status'] ) && ! array_filter( array_keys( apply_filters( 'user_row_actions', [], get_userdata( $s1 ) ) ), function ( $k ) { return strpos( $k, 'clu_status_' ) === 0; } ) && ! isset( apply_filters( 'bulk_actions-users', [] )['clu_status_approve'] ) );
+    ob_start();
+    do_action( 'edit_user_profile', get_userdata( $s1 ) );
+    t( 'while off the user screen has no status field', strpos( ob_get_clean(), 'name="clu_status"' ) === false );
+    t( 'while off a click on an old link does nothing', $status_click( 'clu_status_reject', $s1 ) === 'nothing' && get_user_meta( $s1, 'clu_status', true ) === 'approved' );
+    delete_user_meta( $s1, 'clu_status' );
+    wp_set_current_user( 0 );
+
+    // On.
+    update_option( 'clu_user_status', [ 'enabled' => '1', 'label' => 'Business customer' ] );
+    t( 'on, with the name the site gave', clu_status_is_on() && clu_status_label() === 'Business customer' );
+    update_option( 'clu_user_status', [ 'enabled' => '1', 'label' => '' ] );
+    t( 'without a name it is "Status"', clu_status_label() === 'Status' );
+    update_option( 'clu_user_status', [ 'enabled' => '1', 'label' => 'Business customer' ] );
+
+    $others = has_action( 'clu_user_status_changed' );
+    $seen   = [];
+    $spy    = function ( $user_id, $status, $old ) use ( &$seen ) {
+        $seen[] = [ $user_id, $status, $old ];
+    };
+    add_action( 'clu_user_status_changed', $spy, 10, 3 );
+    $GLOBALS['clu_mails'] = [];
+    wp_set_current_user( CLU_TEST_ADMIN );
+
+    t( 'a user starts without a status', clu_get_user_status( $s1 ) === '' );
+    t( 'setting it to pending', clu_set_user_status( $s1, 'pending' ) && clu_get_user_status( $s1 ) === 'pending' );
+    t( 'the pending count follows', clu_status_pending_count() === 1 );
+    t( 'a pending user sees no restricted content', visit( $spage, $s1 ) !== 'open' );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    t( 'approving', clu_set_user_status( $s1, 'approved' ) && clu_user_status_is_approved( $s1 ) && clu_status_pending_count() === 0 );
+    t( 'the role is not touched', get_userdata( $s1 )->roles === [ 'subscriber' ] );
+    t( 'who changed it and when are kept', (int) get_user_meta( $s1, 'clu_status_changed_by', true ) === CLU_TEST_ADMIN && (int) get_user_meta( $s1, 'clu_status_changed_at', true ) > 0 );
+    t( 'the action fires with the new and the old status', $seen === [ [ $s1, 'pending', '' ], [ $s1, 'approved', 'pending' ] ], wp_json_encode( $seen ) );
+    t( 'setting the same status again fires nothing', clu_set_user_status( $s1, 'approved' ) && count( $seen ) === 2 );
+    t( 'an unknown status is refused', clu_set_user_status( $s1, 'vip' ) === false && clu_get_user_status( $s1 ) === 'approved' );
+    t( 'an unknown user is refused', clu_set_user_status( 999999999, 'approved' ) === false );
+    if ( $others ) {
+        skip( 'no email goes out for a status', 'another plugin on this site listens to status changes and may send its own' );
+    } else {
+        t( 'no email goes out for a status', ! $GLOBALS['clu_mails'] );
+    }
+    t( 'the approved status opens restricted content', visit( $spage, $s1 ) === 'open' );
+    t( 'another subscriber still does not see it', visit( $spage, $s2 ) !== 'open' );
+    t( 'a status does not stop a login', ! is_wp_error( wp_authenticate( 'clu_s2', 'Start1!pass' ) ) && clu_set_user_status( $s2, 'rejected' ) && ! is_wp_error( wp_authenticate( 'clu_s2', 'Start1!pass' ) ) );
+    t( 'a status is not the approval of a registration', ! clu_user_is_pending( get_userdata( $s2 ) ) && ! clu_user_is_rejected( get_userdata( $s2 ) ) && clu_available_decisions( get_userdata( $s2 ) ) === [] );
+    clu_set_user_status( $s2, '' );
+    t( 'removing it leaves no status', clu_get_user_status( $s2 ) === '' && get_user_meta( $s2, 'clu_status', true ) === '' );
+
+    // The users list.
+    wp_set_current_user( CLU_TEST_ADMIN );
+    clu_set_user_status( $s2, 'pending' );
+    $columns = apply_filters( 'manage_users_columns', [] );
+    t( 'the column carries the name of the kind of user', ( $columns['clu_status'] ?? '' ) === 'Business customer' );
+    t( 'the column shows the status', apply_filters( 'manage_users_custom_column', '', 'clu_status', $s2 ) === 'Pending' && apply_filters( 'manage_users_custom_column', '', 'clu_status', $s1 ) === 'Approved' );
+    $actions = apply_filters( 'user_row_actions', [ 'edit' => 'x' ], get_userdata( $s2 ) );
+    t( 'a pending user gets approve and reject links', isset( $actions['clu_status_approve'], $actions['clu_status_reject'], $actions['edit'] ) && ! isset( $actions['clu_status_remove'] ) );
+    t( 'the links name the kind of user', strpos( $actions['clu_status_approve'], 'Business customer: approve' ) !== false );
+    $actions = apply_filters( 'user_row_actions', [], get_userdata( $s1 ) );
+    t( 'an approved user gets only the remove link', isset( $actions['clu_status_remove'] ) && ! isset( $actions['clu_status_approve'] ) && ! isset( $actions['clu_status_reject'] ) );
+    $bulk = apply_filters( 'bulk_actions-users', [] );
+    t( 'all three are bulk actions', isset( $bulk['clu_status_approve'], $bulk['clu_status_reject'], $bulk['clu_status_remove'] ) );
+    $views = apply_filters( 'views_users', [] );
+    t( 'a link above the list leads to the pending ones', isset( $views['clu_status_pending'] ) && strpos( $views['clu_status_pending'], 'clu_status=pending' ) !== false && strpos( $views['clu_status_pending'], '(1)' ) !== false );
+    wp_set_current_user( $s1 );
+    $actions = apply_filters( 'user_row_actions', [], get_userdata( $s2 ) );
+    t( 'someone who may not change roles gets no links', ! isset( $actions['clu_status_approve'] ) && ! isset( apply_filters( 'bulk_actions-users', [] )['clu_status_approve'] ) );
+    wp_set_current_user( 0 );
+
+    t( 'a click with a bad nonce does nothing', $status_click( 'clu_status_approve', $s2, 'bad' ) === 'died' && clu_get_user_status( $s2 ) === 'pending' );
+    $target = $status_click( 'clu_status_approve', $s2, null, $s1 );
+    t( 'a subscriber cannot approve', clu_get_user_status( $s2 ) === 'pending' && ( query_of( $target )['clu_status_skipped'] ?? 0 ) == 1, $target );
+    t( 'another action is left alone', $status_click( 'clu_approve', $s2 ) === 'nothing' && clu_get_user_status( $s2 ) === 'pending' );
+    $target = $status_click( 'clu_status_approve', [ $s2, $s1 ] );
+    t( 'an admin approves; the one already approved is skipped', clu_get_user_status( $s2 ) === 'approved' && ( query_of( $target )['clu_status_done'] ?? 0 ) == 1 && ( query_of( $target )['clu_status_skipped'] ?? 0 ) == 1, $target );
+    $target = $status_click( 'clu_status_reject', $s2 );
+    t( 'an admin rejects', clu_get_user_status( $s2 ) === 'rejected' && ( query_of( $target )['clu_status_done'] ?? 0 ) == 1 );
+    $target = $status_click( 'clu_status_remove', [ $s1, $s2 ] );
+    t( 'an admin removes the status of several', clu_get_user_status( $s1 ) === '' && clu_get_user_status( $s2 ) === '' && ( query_of( $target )['clu_status_done'] ?? 0 ) == 2 );
+    t( 'the role of both is as it was', get_userdata( $s1 )->roles === [ 'subscriber' ] && get_userdata( $s2 )->roles === [ 'subscriber' ] );
+
+    // The user's own screen.
+    wp_set_current_user( CLU_TEST_ADMIN );
+    ob_start();
+    do_action( 'edit_user_profile', get_userdata( $s1 ) );
+    $html = ob_get_clean();
+    t( 'the user screen has the field under the name of the kind of user', strpos( $html, 'name="clu_status"' ) !== false && strpos( $html, '<h2>Business customer</h2>' ) !== false );
+    $_POST = [ 'clu_status' => 'approved', 'clu_status_was' => '' ];
+    do_action( 'edit_user_profile_update', $s1 );
+    t( 'saving the screen with a new status sets it', clu_get_user_status( $s1 ) === 'approved' );
+    clu_set_user_status( $s1, 'rejected' );
+    $_POST = [ 'clu_status' => 'approved', 'clu_status_was' => 'approved' ];
+    do_action( 'edit_user_profile_update', $s1 );
+    t( 'saving a screen where it was not changed leaves a newer decision', clu_get_user_status( $s1 ) === 'rejected' );
+    wp_set_current_user( $s2 );
+    ob_start();
+    do_action( 'show_user_profile', get_userdata( $s2 ) );
+    t( 'a user does not see the field on their own profile', strpos( ob_get_clean(), 'name="clu_status"' ) === false );
+    $_POST = [ 'clu_status' => 'approved', 'clu_status_was' => '' ];
+    do_action( 'personal_options_update', $s2 );
+    t( 'and cannot approve themselves by posting it', clu_get_user_status( $s2 ) === '' );
+    $_POST = [];
+    wp_set_current_user( 0 );
+
+    // The settings tab.
+    $tabs = clu_get_settings_tabs();
+    t( 'the settings have a User Status tab', ( $tabs['user-status-settings']['option_name'] ?? '' ) === 'clu_user_status' && is_file( $tabs['user-status-settings']['fields_file'] ) );
+    wp_set_current_user( CLU_TEST_ADMIN );
+    clu_register_settings();
+    $saved = sanitize_option( 'clu_user_status', [ 'enabled' => 'yes', 'label' => ' Members <b>x</b> ' ] );
+    t( 'saving the tab keeps a clean flag and name', $saved === [ 'enabled' => '1', 'label' => 'Members x' ], wp_json_encode( $saved ) );
+    $saved = sanitize_option( 'clu_user_status', [ 'label' => 'Members' ] );
+    t( 'an unticked box saves as off', $saved['enabled'] === '' );
+    wp_set_current_user( 0 );
+
+    // Turned off again: what was saved stays, and counts for nothing.
+    clu_set_user_status( $s1, 'approved' );
+    update_option( 'clu_user_status', [ 'enabled' => '', 'label' => 'Business customer' ] );
+    t( 'turned off, an approved status opens nothing', clu_get_user_status( $s1 ) === '' && visit( $spage, $s1 ) !== 'open' );
+    update_option( 'clu_user_status', [ 'enabled' => '1', 'label' => 'Business customer' ] );
+    t( 'turned on again, it is back', clu_get_user_status( $s1 ) === 'approved' );
+
+    remove_action( 'clu_user_status_changed', $spy, 10 );
+    wp_set_current_user( 0 );
+}
+
+reset_state();
+section( '28. Nonces, templates, settings, update and uninstall' );
 {
     $res = ajax( 'clu_refresh_nonce', [ 'field' => 'login_nonce' ] );
     wp_set_current_user( 0 );
@@ -2386,7 +2550,7 @@ section( '27. Nonces, templates, settings, update and uninstall' );
     }
     $dead = [];
     foreach ( $fields as $option => $keys ) {
-        if ( in_array( $option, [ 'clu_mail', 'clu_pages_url', 'clu_security' ], true ) ) {
+        if ( in_array( $option, [ 'clu_mail', 'clu_pages_url', 'clu_security', 'clu_user_status' ], true ) ) {
             continue;
         }
         foreach ( $keys as $key ) {
@@ -2513,6 +2677,8 @@ section( '27. Nonces, templates, settings, update and uninstall' );
     update_option( 'clu_replace_wp_login', '1' );
     update_option( 'clu_security', [ 'limit_logins' => '1' ] );
     update_option( 'clu_auto_approve', '1' );
+    update_option( 'clu_user_status', [ 'enabled' => '1', 'label' => 'Member' ] );
+    clu_set_user_status( $marker_id, 'approved' );
     foreach ( [ 'pending_user', 'approved_user', 'rejected_user', 'unconfirmed_user' ] as $r ) {
         foreach ( get_users( [ 'role' => $r, 'fields' => 'ID' ] ) as $uid ) {
             get_userdata( $uid )->set_role( 'subscriber' );
@@ -2528,12 +2694,13 @@ section( '27. Nonces, templates, settings, update and uninstall' );
     t( 'uninstall removes the replacement setting', get_option( 'clu_replace_wp_login', 'gone' ) === 'gone' );
     t( 'uninstall removes the login protection settings', get_option( 'clu_security', 'gone' ) === 'gone' );
     t( 'uninstall removes the automatic approval setting', get_option( 'clu_auto_approve', 'gone' ) === 'gone' );
+    t( 'uninstall removes the status setting and every status', get_option( 'clu_user_status', 'gone' ) === 'gone' && get_user_meta( $marker_id, 'clu_status', true ) === '' && get_user_meta( $marker_id, 'clu_status_changed_at', true ) === '' );
     t( 'uninstall removes the flag on users', ! get_user_meta( $marker_id, 'clu_approval_link', true ) );
     t( 'uninstall removes what confirmed an address', ! get_user_meta( $marker_id, 'clu_email_confirm', true ) && ! get_user_meta( $marker_id, 'clu_email_confirmed', true ) );
     t( 'uninstall removes the flag on pages', get_post_meta( $marker_page, '_clu_restricted', true ) === '' );
 }
 
-section( '28. PHP warnings raised from inside the plugin during all of the above' );
+section( '29. PHP warnings raised from inside the plugin during all of the above' );
 $warnings = array_values( array_unique( $GLOBALS['clu_php_warnings'] ) );
 t( 'no PHP warnings', count( $warnings ) === 0, implode( "\n             ", array_slice( $warnings, 0, 12 ) ) );
 

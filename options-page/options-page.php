@@ -128,6 +128,14 @@ function clu_get_settings_tabs() {
             'title' => 'User Roles',
             'type'  => 'roles',
         ],
+        'user-status-settings' => [
+            'title'          => 'User Status',
+            'settings_group' => 'user-status-group',
+            'section_id'     => 'user-status-section',
+            'section_title'  => 'User Status',
+            'fields_file'    => $fields_dir . 'array_status.php',
+            'option_name'    => 'clu_user_status',
+        ],
         'login-protection-settings' => [
             'title'          => 'Login Protection',
             'settings_group' => 'login-protection-group',
